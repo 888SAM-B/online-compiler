@@ -1,0 +1,470 @@
+# MASTER IMPLEMENTATION PROMPT
+
+Build a complete production-ready Web-Based Online Compiler Platform.
+
+## Tech Stack
+
+### Frontend
+
+* React.js (Vite)
+* React Router DOM
+* Tailwind CSS
+* Axios
+* Monaco Editor
+* React Hook Form
+* JWT Authentication
+
+### Backend
+
+* Python FastAPI
+* Pydantic
+* Motor (MongoDB Async Driver)
+* JWT Authentication
+* Docker SDK for Python
+* Passlib (Password Hashing)
+
+### Database
+
+* MongoDB
+
+### Containerization
+
+* Docker
+* Docker Compose
+
+---
+
+# Project Goal
+
+Develop a secure online compiler platform where users can:
+
+* Register/Login
+* Create Programs
+* Edit Code Online
+* Save Programs
+* Open Programs
+* Delete Programs
+* Download Programs
+* Execute Code
+* View Output
+* View Error Logs
+* View Execution History
+
+Admin users should be able to:
+
+* Manage Users
+* Manage Supported Languages
+* View Activity Logs
+* View Analytics
+
+The system must support:
+
+* Python
+* JavaScript
+* C
+* C++
+* Java
+
+using Docker containers for secure execution.
+
+---
+
+# Architecture
+
+Frontend:
+React Application
+
+Backend:
+FastAPI REST API
+
+Database:
+MongoDB
+
+Execution Engine:
+Docker-based isolated code execution service
+
+---
+
+# Folder Structure
+
+root/
+
+frontend/
+
+backend/
+
+docker/
+
+docs/
+
+docker-compose.yml
+
+README.md
+
+---
+
+# Frontend Requirements
+
+Create a modern responsive UI.
+
+Pages:
+
+1. Landing Page
+2. Login Page
+3. Register Page
+4. Dashboard
+5. Code Editor Page
+6. Program Management Page
+7. Execution History Page
+8. Profile Page
+9. Admin Dashboard
+10. User Management Page
+11. Analytics Page
+
+---
+
+# Authentication Module
+
+Implement:
+
+* User Registration
+* Login
+* Logout
+* JWT Authentication
+* Refresh Tokens
+* Password Hashing
+* Role Based Access Control
+
+Roles:
+
+* user
+* admin
+
+User fields:
+
+id
+name
+email
+password
+role
+created_at
+updated_at
+
+---
+
+# Code Editor Module
+
+Use Monaco Editor.
+
+Features:
+
+* Syntax Highlighting
+* Auto Completion
+* Line Numbers
+* Auto Indentation
+* Dark Theme
+* Light Theme
+* Auto Save
+* Language Selection
+
+Supported Languages:
+
+* Python
+* JavaScript
+* C
+* C++
+* Java
+
+---
+
+# Program Management
+
+Users can:
+
+* Create Program
+* Save Program
+* Update Program
+* Delete Program
+* Download Program
+* Open Existing Program
+
+Program fields:
+
+id
+user_id
+title
+language
+source_code
+created_at
+updated_at
+
+---
+
+# Execution Engine
+
+Implement secure Docker-based execution.
+
+Workflow:
+
+1. Receive code from frontend
+2. Create temporary execution directory
+3. Store source code file
+4. Launch Docker container
+5. Compile if required
+6. Execute code
+7. Capture stdout
+8. Capture stderr
+9. Return results
+10. Destroy container
+11. Remove temporary files
+
+Never execute code directly on host machine.
+
+---
+
+# Docker Images
+
+Python:
+python:3.12-slim
+
+JavaScript:
+node:20-alpine
+
+Java:
+openjdk:21
+
+C:
+gcc:latest
+
+C++:
+gcc:latest
+
+---
+
+# Security Requirements
+
+Implement:
+
+* CPU Limits
+* Memory Limits
+* Execution Timeout
+* Container Isolation
+* No Privileged Containers
+* Read Only Containers where possible
+* Automatic Cleanup
+
+Execution Limits:
+
+CPU:
+1 Core
+
+Memory:
+256MB
+
+Timeout:
+5 Seconds
+
+Disk:
+50MB
+
+Kill containers exceeding limits.
+
+---
+
+# Output Console
+
+Display:
+
+* Standard Output
+* Standard Error
+* Compilation Errors
+* Runtime Errors
+
+Return:
+
+success
+output
+error
+execution_time
+
+---
+
+# Execution History
+
+Store:
+
+id
+user_id
+program_id
+language
+output
+error
+execution_time
+executed_at
+
+Allow users to view history.
+
+---
+
+# Admin Module
+
+Admin Features:
+
+User Management:
+
+* View Users
+* Search Users
+* Delete Users
+* Block Users
+
+Language Management:
+
+* Enable Language
+* Disable Language
+
+Activity Logs:
+
+* User Login
+* User Execution
+* User Program Creation
+
+---
+
+# Analytics Dashboard
+
+Show:
+
+* Total Users
+* Active Users
+* Total Executions
+* Programs Created
+* Most Used Language
+* Daily Executions
+
+Create charts and statistics.
+
+---
+
+# MongoDB Collections
+
+users
+
+programs
+
+execution_history
+
+activity_logs
+
+settings
+
+supported_languages
+
+---
+
+# API Design
+
+Authentication:
+
+POST /api/auth/register
+
+POST /api/auth/login
+
+POST /api/auth/refresh
+
+GET /api/auth/me
+
+Programs:
+
+GET /api/programs
+
+POST /api/programs
+
+GET /api/programs/{id}
+
+PUT /api/programs/{id}
+
+DELETE /api/programs/{id}
+
+Execution:
+
+POST /api/execute
+
+GET /api/history
+
+Admin:
+
+GET /api/admin/users
+
+DELETE /api/admin/users/{id}
+
+GET /api/admin/analytics
+
+---
+
+# Docker Compose Services
+
+frontend
+
+backend
+
+mongodb
+
+executor
+
+nginx
+
+---
+
+# Environment Variables
+
+Frontend:
+
+VITE_API_URL
+
+Backend:
+
+MONGO_URI
+
+JWT_SECRET
+
+JWT_EXPIRE
+
+DOCKER_HOST
+
+---
+
+# UI Requirements
+
+Modern developer-focused design.
+
+Include:
+
+* Responsive Layout
+* Sidebar Navigation
+* Top Navigation
+* Monaco Editor Layout
+* Output Terminal
+* Loading Indicators
+* Toast Notifications
+* Empty States
+* Error Handling
+
+---
+
+# Future Ready Features (Prepare Architecture)
+
+* AI Code Suggestions
+* AI Bug Fixing
+* Code Sharing
+* Real-Time Collaboration
+* Coding Challenges
+* Online Assessments
+* Certificate Generation
+* Multi File Projects
+* GitHub Integration
+
+Design code with scalability and modular architecture.
+
+Generate complete source code with proper folder structure, reusable components, API services, Docker configuration, authentication middleware, database models, execution engine, and documentation.
+
+Follow clean architecture principles, SOLID principles, and production-ready coding standards.
