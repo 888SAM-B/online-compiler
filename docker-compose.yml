@@ -1,0 +1,68 @@
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: compiler_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - compiler_network
+    restart: unless-stopped
+
+  backend:
+    image: compiler_backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: compiler_backend
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017
+      - JWT_SECRET=super-secret-key-that-should-be-changed-in-production-1234567890
+      - JWT_EXPIRE=30
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mongodb
+    networks:
+      - compiler_network
+    restart: unless-stopped
+
+  frontend:
+    image: compiler_frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: compiler_frontend
+    environment:
+      - VITE_API_URL=http://localhost/api
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - compiler_network
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: compiler_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - compiler_network
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
+
+networks:
+  compiler_network:
+    driver: bridge

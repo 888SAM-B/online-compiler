@@ -1,0 +1,119 @@
+import logging
+from motor.motor_asyncio import AsyncIOMotorClient
+from passlib.context import CryptContext
+from datetime import datetime
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+class Database:
+    client: AsyncIOMotorClient = None
+    db = None
+
+db_instance = Database()
+
+def get_db():
+    return db_instance.db
+
+async def init_db():
+    try:
+        db_instance.client = AsyncIOMotorClient(settings.MONGO_URI)
+        db_instance.db = db_instance.client[settings.DB_NAME]
+        
+        # Verify connection
+        await db_instance.client.admin.command('ping')
+        logger.info("Successfully connected to MongoDB!")
+        
+        # Create indexes
+        await db_instance.db.users.create_index("email", unique=True)
+        await db_instance.db.programs.create_index("user_id")
+        await db_instance.db.execution_history.create_index("user_id")
+        await db_instance.db.execution_history.create_index("executed_at")
+        await db_instance.db.activity_logs.create_index("timestamp")
+        
+        # Seed supported languages
+        await seed_languages()
+        
+        # Seed admin user
+        await seed_admin()
+        
+    except Exception as e:
+        logger.error(f"Failed to connect to MongoDB: {e}")
+        raise e
+
+async def seed_languages():
+    languages = [
+        {
+            "name": "python",
+            "display_name": "Python 3.12",
+            "enabled": True,
+            "docker_image": "python:3.12-slim",
+            "filename": "script.py",
+            "compile_cmd": "",
+            "run_cmd": "python script.py"
+        },
+        {
+            "name": "javascript",
+            "display_name": "JavaScript (Node 20)",
+            "enabled": True,
+            "docker_image": "node:20-alpine",
+            "filename": "index.js",
+            "compile_cmd": "",
+            "run_cmd": "node index.js"
+        },
+        {
+            "name": "c",
+            "display_name": "C (GCC)",
+            "enabled": True,
+            "docker_image": "gcc:latest",
+            "filename": "main.c",
+            "compile_cmd": "gcc main.c -o main",
+            "run_cmd": "./main"
+        },
+        {
+            "name": "cpp",
+            "display_name": "C++ (G++)",
+            "enabled": True,
+            "docker_image": "gcc:latest",
+            "filename": "main.cpp",
+            "compile_cmd": "g++ main.cpp -o main",
+            "run_cmd": "./main"
+        },
+        {
+            "name": "java",
+            "display_name": "Java (OpenJDK 21)",
+            "enabled": True,
+            "docker_image": "openjdk:21",
+            "filename": "Main.java",
+            "compile_cmd": "javac Main.java",
+            "run_cmd": "java Main"
+        }
+    ]
+    
+    for lang in languages:
+        existing = await db_instance.db.supported_languages.find_one({"name": lang["name"]})
+        if not existing:
+            await db_instance.db.supported_languages.insert_one({
+                **lang,
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow()
+            })
+            logger.info(f"Seeded language: {lang['display_name']}")
+
+async def seed_admin():
+    admin_email = "admin@compiler.com"
+    existing = await db_instance.db.users.find_one({"email": admin_email})
+    if not existing:
+        admin_user = {
+            "name": "System Admin",
+            "email": admin_email,
+            "password": pwd_context.hash("adminpassword"),
+            "role": "admin",
+            "is_blocked": False,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        await db_instance.db.users.insert_one(admin_user)
+        logger.info(f"Seeded admin user: {admin_email} / adminpassword")
