@@ -33,6 +33,21 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+# --- Password Reset Models ---
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class VerifyOTPRequest(BaseModel):
+    email: EmailStr
+    otp: str = Field(..., min_length=6, max_length=6)
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    otp: str = Field(..., min_length=6, max_length=6)
+    new_password: str = Field(..., min_length=6)
+
+
 # --- Program Models ---
 
 class ProgramCreate(BaseModel):
@@ -115,3 +130,25 @@ class AnalyticsResponse(BaseModel):
     programs_created: int
     most_used_language: str
     daily_executions: List[DailyExecution]
+
+
+# --- AI Assistant Models ---
+
+class ExplainCodeRequest(BaseModel):
+    language: str
+    code: str = Field(..., max_length=20000)
+
+class DebugCodeRequest(BaseModel):
+    language: str
+    code: str = Field(..., max_length=20000)
+
+class GenerateCodeRequest(BaseModel):
+    language: str
+    prompt: str = Field(..., max_length=20000)
+
+class SuggestCodeRequest(BaseModel):
+    language: str
+    code: str = Field(..., max_length=5000)
+    cursor_position: int
+
+

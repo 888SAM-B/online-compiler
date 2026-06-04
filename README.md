@@ -1,4 +1,4 @@
-# DevSandbox — Web-Based Online Compiler Platform
+# DYC CODING CAMPUS — Web-Based Online Compiler Platform
 
 A production-ready, secure, and modern Web-Based Online Compiler Platform. Users can edit code inside a Monaco editor, compile it, and run it inside isolated, resource-constrained Docker containers. System administrators can monitor execution metrics, audit logs, and toggle supported environments.
 

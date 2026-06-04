@@ -3,7 +3,7 @@ services:
     image: mongo:6.0
     container_name: compiler_mongodb
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - mongo_data:/data/db
     networks:
@@ -20,8 +20,14 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - MONGO_URI=mongodb://mongodb:27017
-      - JWT_SECRET=super-secret-key-that-should-be-changed-in-production-1234567890
+      - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRE=30
+      - BREVO_SMTP_HOST=${BREVO_SMTP_HOST}
+      - BREVO_SMTP_PORT=${BREVO_SMTP_PORT}
+      - BREVO_SMTP_USER=${BREVO_SMTP_USER}
+      - BREVO_SMTP_PASSWORD=${BREVO_SMTP_PASSWORD}
+      - FROM_EMAIL=${FROM_EMAIL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     ports:
       - "8000:8000"
     depends_on:

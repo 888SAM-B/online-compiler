@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from datetime import datetime
 from jose import JWTError, jwt
 from bson import ObjectId
@@ -13,7 +13,19 @@ from app.auth import (
     get_current_user,
     log_activity
 )
-from app.models import UserRegister, UserLogin, Token, UserResponse
+from app.models import (
+    UserRegister,
+    UserLogin,
+    Token,
+    UserResponse,
+    ForgotPasswordRequest,
+    VerifyOTPRequest,
+    ResetPasswordRequest
+)
+import hashlib
+import secrets
+from datetime import timedelta
+from app.services import email_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -25,7 +37,7 @@ def serialize_user(user: dict) -> dict:
     return user
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(user_in: UserRegister, request: Request, db=Depends(get_db)):
+async def register(user_in: UserRegister, request: Request, background_tasks: BackgroundTasks, db=Depends(get_db)):
     # Check if user already exists
     existing_user = await db.users.find_one({"email": user_in.email})
     if existing_user:
@@ -56,6 +68,9 @@ async def register(user_in: UserRegister, request: Request, db=Depends(get_db)):
         details="User registered successfully",
         ip_address=request.client.host if request.client else None
     )
+    
+    # Send welcome email in background
+    background_tasks.add_task(email_service.send_welcome_email, new_user["email"], new_user["name"])
     
     return serialize_user(new_user)
 
@@ -187,4 +202,221 @@ async def update_me(payload: dict, current_user: dict = Depends(get_current_user
         return serialize_user(fresh_user)
         
     return serialize_user(current_user)
+
+
+@router.post("/forgot-password")
+async def forgot_password(payload: ForgotPasswordRequest, request: Request, db=Depends(get_db)):
+    ip = request.client.host if request.client else "unknown"
+    email = payload.email.lower()
+    
+    # Rate limit check: last 1 hour
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    
+    # 1. Check rate limits by email (max 3 per hour)
+    email_request_count = await db.password_reset_otps.count_documents({
+        "email": email,
+        "created_at": {"$gte": one_hour_ago}
+    })
+    if email_request_count >= 3:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many password reset requests for this email. Please try again later."
+        )
+        
+    # 2. Check rate limits by IP (max 5 per hour)
+    ip_request_count = await db.password_reset_otps.count_documents({
+        "ip_address": ip,
+        "created_at": {"$gte": one_hour_ago}
+    })
+    if ip_request_count >= 5:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many password reset requests from this IP. Please try again later."
+        )
+        
+    # Check if user exists (Email Enumeration Protection)
+    user = await db.users.find_one({"email": email})
+    
+    if user:
+        # Generate 6-digit secure numeric OTP
+        otp = "".join(secrets.choice("0123456789") for _ in range(6))
+        otp_hash = hashlib.sha256(otp.encode()).hexdigest()
+        
+        # Store in MongoDB
+        otp_record = {
+            "email": email,
+            "otp_hash": otp_hash,
+            "used": False,
+            "attempts": 0,
+            "expires_at": datetime.utcnow() + timedelta(minutes=10),
+            "created_at": datetime.utcnow(),
+            "ip_address": ip
+        }
+        await db.password_reset_otps.insert_one(otp_record)
+        
+        # Send OTP email via Brevo SMTP
+        email_sent = await email_service.send_otp_email(email, otp)
+        if not email_sent:
+            # We fail gracefully or log it. But we should log that sending failed.
+            pass
+            
+        # Log activity
+        await log_activity(
+            user_id=str(user["_id"]),
+            email=email,
+            action="PASSWORD_RESET_REQUEST",
+            details="Password reset OTP requested",
+            ip_address=ip
+        )
+        
+    # Always return generic success response
+    return {"message": "If the account exists, an OTP has been sent."}
+
+
+@router.post("/verify-otp")
+async def verify_otp(payload: VerifyOTPRequest, request: Request, db=Depends(get_db)):
+    ip = request.client.host if request.client else "unknown"
+    email = payload.email.lower()
+    otp = payload.otp
+    
+    # Find latest active OTP record for this email
+    record = await db.password_reset_otps.find_one(
+        {"email": email, "used": False, "expires_at": {"$gt": datetime.utcnow()}},
+        sort=[("created_at", -1)]
+    )
+    
+    if not record:
+        await log_activity(
+            user_id=None,
+            email=email,
+            action="OTP_VERIFICATION_FAILED",
+            details="Invalid or expired OTP (No record found)",
+            ip_address=ip
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OTP"
+        )
+        
+    # Increment attempts
+    await db.password_reset_otps.update_one(
+        {"_id": record["_id"]},
+        {"$inc": {"attempts": 1}}
+    )
+    
+    if record.get("attempts", 0) + 1 > 5:
+        await log_activity(
+            user_id=None,
+            email=email,
+            action="OTP_VERIFICATION_FAILED",
+            details="Too many OTP verification attempts",
+            ip_address=ip
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Too many failed attempts. Please request a new OTP."
+        )
+        
+    # Hash incoming OTP and match
+    incoming_hash = hashlib.sha256(otp.encode()).hexdigest()
+    if incoming_hash != record["otp_hash"]:
+        await log_activity(
+            user_id=None,
+            email=email,
+            action="OTP_VERIFICATION_FAILED",
+            details="Invalid OTP entered",
+            ip_address=ip
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OTP"
+        )
+        
+    return {"valid": True}
+
+
+@router.post("/reset-password")
+async def reset_password(payload: ResetPasswordRequest, request: Request, db=Depends(get_db)):
+    ip = request.client.host if request.client else "unknown"
+    email = payload.email.lower()
+    otp = payload.otp
+    new_password = payload.new_password
+    
+    # 1. Password validation
+    if len(new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 6 characters"
+        )
+        
+    # 2. Find latest active OTP record
+    record = await db.password_reset_otps.find_one(
+        {"email": email, "used": False, "expires_at": {"$gt": datetime.utcnow()}},
+        sort=[("created_at", -1)]
+    )
+    
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OTP"
+        )
+        
+    # 3. Check attempts limit
+    if record.get("attempts", 0) >= 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Too many failed attempts. Please request a new OTP."
+        )
+        
+    # 4. Verify OTP matches hash and increment attempts on failure
+    incoming_hash = hashlib.sha256(otp.encode()).hexdigest()
+    if incoming_hash != record["otp_hash"]:
+        await db.password_reset_otps.update_one(
+            {"_id": record["_id"]},
+            {"$inc": {"attempts": 1}}
+        )
+        if record.get("attempts", 0) + 1 > 5:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Too many failed attempts. Please request a new OTP."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired OTP"
+        )
+        
+    # 5. Lookup user
+    user = await db.users.find_one({"email": email})
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User not found"
+        )
+        
+    # 6. Update user password
+    hashed_pwd = hash_password(new_password)
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"password": hashed_pwd, "updated_at": datetime.utcnow()}}
+    )
+    
+    # 7. Mark OTP as used
+    await db.password_reset_otps.update_one(
+        {"_id": record["_id"]},
+        {"$set": {"used": True}}
+    )
+    
+    # 8. Send reset success email
+    await email_service.send_reset_success_email(email)
+    
+    # 9. Log activity
+    await log_activity(
+        user_id=str(user["_id"]),
+        email=email,
+        action="PASSWORD_RESET_SUCCESS",
+        details="Password reset successfully completed",
+        ip_address=ip
+    )
+    
+    return {"message": "Password reset successful"}
 

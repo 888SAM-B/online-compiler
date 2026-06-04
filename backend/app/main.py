@@ -5,7 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db
-from app.routes import auth_routes, program_routes, execute_routes, admin_routes
+from app.routes import auth_routes, program_routes, execute_routes, admin_routes, ai_routes
+
 
 # Configure logging
 logging.basicConfig(
@@ -43,6 +44,7 @@ app.include_router(auth_routes.router, prefix=settings.API_V1_STR)
 app.include_router(program_routes.router, prefix=settings.API_V1_STR)
 app.include_router(execute_routes.router, prefix=settings.API_V1_STR)
 app.include_router(admin_routes.router, prefix=settings.API_V1_STR)
+app.include_router(ai_routes.router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 def read_root():

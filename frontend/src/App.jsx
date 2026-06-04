@@ -11,6 +11,7 @@ import Loader from './components/Loader';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import Dashboard from './pages/Dashboard';
 import EditorPage from './pages/EditorPage';
 import ProgramManagement from './pages/ProgramManagement';
@@ -86,6 +87,14 @@ export default function App() {
             element={
               <PublicRoute>
                 <LoginPage />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/forgot-password" 
+            element={
+              <PublicRoute>
+                <ForgotPasswordPage />
               </PublicRoute>
             } 
           />

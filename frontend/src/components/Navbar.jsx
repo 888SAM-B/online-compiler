@@ -28,7 +28,7 @@ export default function Navbar({ onToggleSidebar }) {
             <Terminal className="w-5 h-5" />
           </div>
           <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">
-            Dev<span className="text-brand-purple">Sandbox</span>
+            DYC <span className="text-brand-purple">CODING CAMPUS</span>
           </span>
         </Link>
       </div>

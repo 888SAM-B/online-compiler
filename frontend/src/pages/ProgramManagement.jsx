@@ -50,15 +50,15 @@ export default function ProgramManagement() {
     try {
       let defaultCode = '';
       if (newProgram.language === 'python') {
-        defaultCode = 'print("Hello, Python DevSandbox!")\n';
+        defaultCode = 'print("Hello, Python DYC CODING CAMPUS!")\n';
       } else if (newProgram.language === 'javascript') {
-        defaultCode = 'console.log("Hello, Node.js DevSandbox!");\n';
+        defaultCode = 'console.log("Hello, Node.js DYC CODING CAMPUS!");\n';
       } else if (newProgram.language === 'c') {
-        defaultCode = '#include <stdio.h>\n\nint main() {\n    printf("Hello, C DevSandbox!\\n");\n    return 0;\n}\n';
+        defaultCode = '#include <stdio.h>\n\nint main() {\n    printf("Hello, C DYC CODING CAMPUS!\\n");\n    return 0;\n}\n';
       } else if (newProgram.language === 'cpp') {
-        defaultCode = '#include <iostream>\n\nint main() {\n    std::cout << "Hello, C++ DevSandbox!" << std::endl;\n    return 0;\n}\n';
+        defaultCode = '#include <iostream>\n\nint main() {\n    std::cout << "Hello, C++ DYC CODING CAMPUS!" << std::endl;\n    return 0;\n}\n';
       } else if (newProgram.language === 'java') {
-        defaultCode = 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, Java DevSandbox!");\n    }\n}\n';
+        defaultCode = 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, Java DYC CODING CAMPUS!");\n    }\n}\n';
       }
 
       const res = await api.post('/programs', {

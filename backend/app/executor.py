@@ -66,7 +66,7 @@ async def execute_code(language_info: dict, code: str) -> dict:
             mem_limit=settings.MEM_LIMIT,
             nano_cpus=int(settings.CPU_LIMIT * 1e9),
             pids_limit=30,
-            tmpfs={'/tmp': 'size=50M'},
+            tmpfs={'/tmp': 'size=50M,exec,mode=1777'},
             read_only=True,
             user="nobody",
             detach=True,

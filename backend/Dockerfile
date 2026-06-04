@@ -2,10 +2,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies if any are needed (none required for python-only host Docker SDK, but useful to keep slim)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# No system dependencies needed (Python packages run fine on slim base)
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

@@ -19,7 +19,7 @@ export default function LandingPage() {
             <Terminal className="w-5 h-5" />
           </div>
           <span className="text-xl font-bold tracking-tight">
-            Dev<span className="text-brand-purple">Sandbox</span>
+            DYC <span className="text-brand-purple">CODING CAMPUS</span>
           </span>
         </div>
         <div className="flex items-center gap-4">
@@ -154,7 +154,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-white/5 py-8 text-center text-xs text-gray-500 relative z-10">
-        &copy; {new Date().getFullYear()} DevSandbox Online Compiler. Built with FastAPI, Docker SDK, and React.
+        &copy; {new Date().getFullYear()} DYC CODING CAMPUS Online Compiler. Built with FastAPI, Docker SDK, and React.
       </footer>
     </div>
   );

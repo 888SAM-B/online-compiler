@@ -55,7 +55,7 @@ export default function RegisterPage() {
               <Terminal className="w-5 h-5" />
             </div>
             <span className="text-xl font-bold tracking-tight">
-              Dev<span className="text-brand-purple">Sandbox</span>
+              DYC <span className="text-brand-purple">CODING CAMPUS</span>
             </span>
           </Link>
           <h2 className="text-xl font-semibold text-gray-200">Create your account</h2>

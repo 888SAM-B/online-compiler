@@ -9,8 +9,17 @@ class Settings(BaseSettings):
     MONGO_URI: str = os.getenv("MONGO_URI", "mongodb://localhost:27017")
     DB_NAME: str = "online_compiler"
     
+    # SMTP Settings (Brevo)
+    BREVO_SMTP_HOST: str = os.getenv("BREVO_SMTP_HOST", "")
+    BREVO_SMTP_PORT: int = int(os.getenv("BREVO_SMTP_PORT", "587"))
+    BREVO_SMTP_USER: str = os.getenv("BREVO_SMTP_USER", "")
+    BREVO_SMTP_PASSWORD: str = os.getenv("BREVO_SMTP_PASSWORD", "")
+    FROM_EMAIL: str = os.getenv("FROM_EMAIL", "")
+    SUPPRESS_SEND: bool = os.getenv("SUPPRESS_SEND", "False").lower() in ("true", "1", "t")
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    
     # Security
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "super-secret-key-that-should-be-changed-in-production-1234567890")
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "")
     JWT_EXPIRE: int = int(os.getenv("JWT_EXPIRE", "30"))  # Access token expiry in minutes
     JWT_REFRESH_EXPIRE_DAYS: int = 7  # Refresh token expiry in days
     ALGORITHM: str = "HS256"
@@ -25,6 +34,7 @@ class Settings(BaseSettings):
     DISK_LIMIT: str = "50m"
 
     class Config:
+        env_file = (".env", "../.env")
         case_sensitive = True
 
 settings = Settings()

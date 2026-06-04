@@ -32,6 +32,15 @@ async def init_db():
         await db_instance.db.execution_history.create_index("user_id")
         await db_instance.db.execution_history.create_index("executed_at")
         await db_instance.db.activity_logs.create_index("timestamp")
+        await db_instance.db.password_reset_otps.create_index("expires_at", expireAfterSeconds=0)
+        await db_instance.db.password_reset_otps.create_index("email")
+        await db_instance.db.ai_usage_logs.create_index("created_at")
+        await db_instance.db.ai_usage_logs.create_index("user_id")
+        await db_instance.db.ai_cache.create_index("expires_at", expireAfterSeconds=0)
+        await db_instance.db.ai_cache.create_index("cache_key", unique=True)
+        await db_instance.db.ai_suggestion_cache.create_index("expires_at", expireAfterSeconds=0)
+        await db_instance.db.ai_suggestion_cache.create_index("cache_key", unique=True)
+
         
         # Seed supported languages
         await seed_languages()
@@ -116,17 +125,20 @@ async def seed_languages():
                 logger.info(f"Updated language configuration for: {lang['display_name']}")
 
 async def seed_admin():
-    admin_email = "admin@compiler.com"
+    # Clean up old default admin if it exists
+    await db_instance.db.users.delete_one({"email": "admin@compiler.com"})
+    
+    admin_email = "admin@gmail.com"
     existing = await db_instance.db.users.find_one({"email": admin_email})
     if not existing:
         admin_user = {
             "name": "System Admin",
             "email": admin_email,
-            "password": pwd_context.hash("adminpassword"),
+            "password": pwd_context.hash("admin123"),
             "role": "admin",
             "is_blocked": False,
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         }
         await db_instance.db.users.insert_one(admin_user)
-        logger.info(f"Seeded admin user: {admin_email} / adminpassword")
+        logger.info(f"Seeded admin user: {admin_email} / admin123")
