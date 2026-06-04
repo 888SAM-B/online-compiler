@@ -2,8 +2,6 @@ import os
 import time
 import base64
 import docker
-import tarfile
-import io
 import logging
 from app.config import settings
 
@@ -17,23 +15,6 @@ def get_docker_client():
     except Exception as e:
         logger.error(f"Failed to connect to Docker daemon: {e}")
         raise e
-
-def get_file_content_from_container(container, path):
-    try:
-        bits, stat = container.get_archive(path)
-        tar_stream = io.BytesIO()
-        for chunk in bits:
-            tar_stream.write(chunk)
-        tar_stream.seek(0)
-        with tarfile.open(fileobj=tar_stream) as tar:
-            filename = path.split('/')[-1]
-            f = tar.extractfile(filename)
-            if f:
-                return f.read().decode('utf-8', errors='replace')
-    except Exception:
-        # File might not exist if step was not reached
-        return ""
-    return ""
 
 async def execute_code(language_info: dict, code: str) -> dict:
     docker_image = language_info["docker_image"]
@@ -52,26 +33,24 @@ async def execute_code(language_info: dict, code: str) -> dict:
         logger.info(f"Image {docker_image} pulled successfully.")
     except Exception as e:
         logger.warning(f"Error checking/pulling image {docker_image}: {e}")
-        # Proceed anyway, run might still work if image is locally available under a different tag or if pull works on the fly
         
     # Base64 encode the code to pass it safely through the shell
     encoded_code = base64.b64encode(code.encode('utf-8')).decode('utf-8')
     
     # Construct container script
-    # Write code -> Compile (if needed) -> Run -> Redirect outputs to files
+    # Write code -> Compile (if needed) -> Run. All stdout/stderr is captured directly via Docker logs.
     if compile_cmd:
-        # If compilation fails, it won't run the run_cmd
         command = (
             f"sh -c 'echo {encoded_code} | base64 -d > /tmp/{filename} && "
             f"cd /tmp && "
-            f"({compile_cmd}) > /tmp/compile_out.txt 2> /tmp/compile_err.txt && "
-            f"({run_cmd}) > /tmp/stdout.txt 2> /tmp/stderr.txt'"
+            f"({compile_cmd}) && "
+            f"({run_cmd})'"
         )
     else:
         command = (
             f"sh -c 'echo {encoded_code} | base64 -d > /tmp/{filename} && "
             f"cd /tmp && "
-            f"({run_cmd}) > /tmp/stdout.txt 2> /tmp/stderr.txt'"
+            f"({run_cmd})'"
         )
         
     container = None
@@ -111,11 +90,9 @@ async def execute_code(language_info: dict, code: str) -> dict:
                 
         execution_time = round(time.time() - start_time, 3)
         
-        # Fetch output files
-        compile_out = get_file_content_from_container(container, "/tmp/compile_out.txt")
-        compile_err = get_file_content_from_container(container, "/tmp/compile_err.txt")
-        stdout = get_file_content_from_container(container, "/tmp/stdout.txt")
-        stderr = get_file_content_from_container(container, "/tmp/stderr.txt")
+        # Capture standard streams directly from Docker logs
+        stdout = container.logs(stdout=True, stderr=False).decode('utf-8', errors='replace')
+        stderr = container.logs(stdout=False, stderr=True).decode('utf-8', errors='replace')
         
         # Container exit code
         container.reload()
@@ -129,15 +106,12 @@ async def execute_code(language_info: dict, code: str) -> dict:
         if timed_out:
             success = False
             error_msg = f"Execution Timeout: Code exceeded limits of {timeout} seconds."
-        elif compile_err:
-            success = False
-            error_msg = compile_err
+            output_msg = ""
         elif exit_code != 0:
             success = False
-            # Standard error or system error
             error_msg = stderr if stderr else f"Runtime Error (Exit Code: {exit_code})"
         else:
-            # Check stderr even on exit code 0 (some warnings might be printed, but they are not failures unless exit code is non-zero)
+            # Check stderr even on exit code 0 (some warnings might be printed, but they are not failures)
             if stderr:
                 error_msg = stderr
                 
@@ -164,3 +138,4 @@ async def execute_code(language_info: dict, code: str) -> dict:
                 container.remove(force=True)
             except Exception as e:
                 logger.warning(f"Failed to remove container: {e}")
+

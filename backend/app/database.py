@@ -83,9 +83,9 @@ async def seed_languages():
         },
         {
             "name": "java",
-            "display_name": "Java (OpenJDK 21)",
+            "display_name": "Java (Temurin 21)",
             "enabled": True,
-            "docker_image": "openjdk:21",
+            "docker_image": "eclipse-temurin:21",
             "filename": "Main.java",
             "compile_cmd": "javac Main.java",
             "run_cmd": "java Main"
@@ -101,6 +101,19 @@ async def seed_languages():
                 "updated_at": datetime.utcnow()
             })
             logger.info(f"Seeded language: {lang['display_name']}")
+        else:
+            if existing.get("docker_image") != lang["docker_image"] or existing.get("display_name") != lang["display_name"]:
+                await db_instance.db.supported_languages.update_one(
+                    {"name": lang["name"]},
+                    {"$set": {
+                        "docker_image": lang["docker_image"],
+                        "display_name": lang["display_name"],
+                        "compile_cmd": lang["compile_cmd"],
+                        "run_cmd": lang["run_cmd"],
+                        "updated_at": datetime.utcnow()
+                    }}
+                )
+                logger.info(f"Updated language configuration for: {lang['display_name']}")
 
 async def seed_admin():
     admin_email = "admin@compiler.com"

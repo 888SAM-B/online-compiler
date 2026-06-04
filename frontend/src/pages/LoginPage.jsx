@@ -31,7 +31,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-screen bg-dark-950 flex flex-col justify-center items-center p-6 text-gray-100 overflow-hidden">
+    <div className="relative min-h-screen bg-dark-950 flex flex-col justify-center items-center p-6 text-gray-100 overflow-y-auto">
       {/* Decorative Blur Blobs */}
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-brand-purple/10 rounded-full blur-[100px] z-0 animate-pulse-slow"></div>
 
