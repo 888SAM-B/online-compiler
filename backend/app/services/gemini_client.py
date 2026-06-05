@@ -35,7 +35,7 @@ async def call_gemini(prompt: str, json_response: bool = False) -> str:
     async with httpx.AsyncClient() as client:
         last_exception = None
         for i, api_key in enumerate(api_keys):
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={api_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
             try:
                 response = await client.post(url, json=payload, timeout=30.0)
                 

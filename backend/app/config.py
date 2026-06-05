@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     # Database
     MONGO_URI: str = os.getenv("MONGO_URI", "mongodb://localhost:27017")
     DB_NAME: str = "online_compiler"
+    REDIS_URI: str = os.getenv("REDIS_URI", "redis://localhost:6379")
+
     
     # SMTP Settings (Brevo)
     BREVO_SMTP_HOST: str = os.getenv("BREVO_SMTP_HOST", "")

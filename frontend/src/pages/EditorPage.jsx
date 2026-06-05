@@ -25,9 +25,14 @@ import Terminal from '../components/Terminal';
 import Loader from '../components/Loader';
 import Toast from '../components/Toast';
 import ShareCodeModal from '../components/ShareCodeModal';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import InteractiveTerminal from '../components/InteractiveTerminal';
+import { startSession, getActiveSession } from '../services/terminalService';
 
 export default function EditorPage() {
   const { id } = useParams();
+  const [interactiveSessionId, setInteractiveSessionId] = useState(null);
+
   const navigate = useNavigate();
   
   const [loading, setLoading] = useState(true);
@@ -171,6 +176,33 @@ export default function EditorPage() {
     };
     fetchProgram();
   }, [id, navigate]);
+
+  // Active session check & global shortcuts
+  useEffect(() => {
+    const checkActiveSession = async () => {
+      try {
+        const active = await getActiveSession();
+        if (active && active.session_id) {
+          setInteractiveSessionId(active.session_id);
+          setLanguage(active.language);
+        }
+      } catch (err) {
+        console.error("Failed to check active terminal session", err);
+      }
+    };
+    
+    const handleGlobalKeys = (e) => {
+      if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        handleRun();
+      }
+    };
+
+    checkActiveSession();
+    window.addEventListener('keydown', handleGlobalKeys);
+    return () => window.removeEventListener('keydown', handleGlobalKeys);
+  }, [code, language]);
+
 
   // Debounced Auto Save
   useEffect(() => {
@@ -345,35 +377,26 @@ export default function EditorPage() {
 
   const handleRun = async () => {
     setRunning(true);
-    setStdout(null);
-    setStderr(null);
-    setExecutionTime(null);
     try {
       // Auto save before running
       if (id) {
         await handleSave(true);
       }
       
-      const res = await api.post('/execute', {
-        code,
-        language,
-        program_id: id || null
-      });
-
-      if (res.data.success) {
-        setStdout(res.data.output);
-        setStderr(res.data.error || null); // Display warnings if any
-      } else {
-        setStdout(res.data.output || null);
-        setStderr(res.data.error);
+      const res = await startSession(language, code);
+      if (res && res.session_id) {
+        setInteractiveSessionId(res.session_id);
       }
-      setExecutionTime(res.data.execution_time);
     } catch (err) {
-      setStderr(err.response?.data?.detail || 'Execution request failed.');
+      setToast({
+        message: err.response?.data?.detail || err.response?.data?.message || 'Failed to start interactive execution.',
+        type: 'error'
+      });
     } finally {
       setRunning(false);
     }
   };
+
 
   const handleDownload = () => {
     let extension = 'txt';
@@ -529,82 +552,97 @@ export default function EditorPage() {
       </div>
 
       {/* Editor Split Panel */}
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0">
-        {/* Editor Workspace */}
-        <div className="flex-1 flex flex-col border-b lg:border-b-0 lg:border-r border-white/5 min-h-[300px] lg:min-h-0">
-          <div className="flex items-center justify-between px-6 py-2 border-b border-white/5 bg-dark-950/20 text-xs">
-            <div className="flex items-center gap-3">
-              <span className="text-gray-400 capitalize">Source Code Editor</span>
-              <span className="text-brand-purple font-mono uppercase font-bold">{language}</span>
+      <div className="flex-1 flex flex-col min-h-0 bg-dark-950">
+        <PanelGroup direction="vertical">
+          <Panel defaultSize={60} minSize={30} className="flex flex-col min-h-0">
+            {/* Editor Workspace */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex items-center justify-between px-6 py-2 border-b border-white/5 bg-dark-950/20 text-xs">
+                <div className="flex items-center gap-3">
+                  <span className="text-gray-400 capitalize">Source Code Editor</span>
+                  <span className="text-brand-purple font-mono uppercase font-bold">{language}</span>
+                </div>
+                
+                {/* AI Assistant Quick Actions */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleAIAction('EXPLAIN')}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-purple/10 hover:bg-brand-purple/20 border border-brand-purple/20 text-brand-purple hover:text-white transition-all text-[10px] font-semibold"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    Explain Code
+                  </button>
+                  <button
+                    onClick={() => handleAIAction('DEBUG')}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-teal/10 hover:bg-brand-teal/20 border border-brand-teal/20 text-brand-teal hover:text-white transition-all text-[10px] font-semibold"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    Debug Code
+                  </button>
+                  <button
+                    onClick={() => handleAIAction('GENERATE')}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-green/10 hover:bg-brand-green/20 border border-brand-green/20 text-brand-green hover:text-white transition-all text-[10px] font-semibold"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    Generate Code
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 min-h-0">
+                <Editor
+                  height="100%"
+                  language={getMonacoLanguage(language)}
+                  value={code}
+                  theme={editorTheme}
+                  onMount={handleEditorDidMount}
+                  onChange={(value) => setCode(value || '')}
+                  options={{
+                    fontSize: 14,
+                    fontFamily: "'Fira Code', 'JetBrains Mono', monospace",
+                    minimap: { enabled: false },
+                    lineNumbers: 'on',
+                    roundedSelection: true,
+                    scrollBeyondLastLine: false,
+                    readOnly: false,
+                    automaticLayout: true,
+                    padding: { top: 10, bottom: 10 },
+                    inlineSuggest: {
+                      enabled: true,
+                      mode: "subword"
+                    },
+                    suggest: {
+                      preview: true
+                    }
+                  }}
+                />
+              </div>
             </div>
-            
-            {/* AI Assistant Quick Actions */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleAIAction('EXPLAIN')}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-purple/10 hover:bg-brand-purple/20 border border-brand-purple/20 text-brand-purple hover:text-white transition-all text-[10px] font-semibold animate-pulse"
-              >
-                <Sparkles className="w-3 h-3" />
-                Explain Code
-              </button>
-              <button
-                onClick={() => handleAIAction('DEBUG')}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-teal/10 hover:bg-brand-teal/20 border border-brand-teal/20 text-brand-teal hover:text-white transition-all text-[10px] font-semibold animate-pulse"
-              >
-                <Sparkles className="w-3 h-3" />
-                Debug Code
-              </button>
-              <button
-                onClick={() => handleAIAction('GENERATE')}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-green/10 hover:bg-brand-green/20 border border-brand-green/20 text-brand-green hover:text-white transition-all text-[10px] font-semibold animate-pulse"
-              >
-                <Sparkles className="w-3 h-3" />
-                Generate Code
-              </button>
-            </div>
-          </div>
-          <div className="flex-1 min-h-0">
-            <Editor
-              height="100%"
-              language={getMonacoLanguage(language)}
-              value={code}
-              theme={editorTheme}
-              onMount={handleEditorDidMount}
-              onChange={(value) => setCode(value || '')}
-              options={{
-                fontSize: 14,
-                fontFamily: "'Fira Code', 'JetBrains Mono', monospace",
-                minimap: { enabled: false },
-                lineNumbers: 'on',
-                roundedSelection: true,
-                scrollBeyondLastLine: false,
-                readOnly: false,
-                automaticLayout: true,
-                padding: { top: 10, bottom: 10 },
-                inlineSuggest: {
-                  enabled: true,
-                  mode: "subword"
-                },
-                suggest: {
-                  preview: true
-                }
-              }}
-
-            />
-          </div>
-        </div>
-
-        {/* Output Panel */}
-        <div className="flex-1 lg:max-w-xl flex flex-col p-4 bg-dark-950/40 min-h-[250px] lg:min-h-0">
-          <Terminal
-            output={stdout}
-            error={stderr}
-            executionTime={executionTime}
-            loading={running}
-            onClear={handleClearTerminal}
-          />
-        </div>
+          </Panel>
+          
+          <PanelResizeHandle className="h-1.5 bg-white/5 hover:bg-brand-purple/50 cursor-row-resize transition-all duration-200" />
+          
+          <Panel defaultSize={40} minSize={20} className="flex flex-col min-h-0 p-4 bg-dark-950/40">
+            {interactiveSessionId ? (
+              <InteractiveTerminal
+                sessionId={interactiveSessionId}
+                language={language}
+                onStop={() => {}}
+                onRun={handleRun}
+                isRunningParent={running}
+              />
+            ) : (
+              <Terminal
+                output={stdout}
+                error={stderr}
+                executionTime={executionTime}
+                loading={running}
+                onClear={handleClearTerminal}
+              />
+            )}
+          </Panel>
+        </PanelGroup>
       </div>
+
       {/* AI Assistant Modal */}
       {aiModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
