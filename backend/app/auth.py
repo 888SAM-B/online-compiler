@@ -11,6 +11,7 @@ from app.database import get_db
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
 
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
@@ -70,6 +71,38 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     # Standardize output user dictionary
     user["id"] = str(user["_id"])
     return user
+
+async def get_current_user_optional(token: Optional[str] = Depends(oauth2_scheme_optional)) -> Optional[dict]:
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.ALGORITHM])
+        email: str = payload.get("sub")
+        role: str = payload.get("role")
+        user_id: str = payload.get("user_id")
+        is_refresh = payload.get("refresh", False)
+        
+        if email is None or is_refresh:
+            return None
+    except JWTError:
+        return None
+        
+    db = get_db()
+    if db is None:
+        return None
+        
+    try:
+        user = await db.users.find_one({"_id": ObjectId(user_id)})
+        if user is None:
+            return None
+            
+        if user.get("is_blocked", False):
+            return None
+            
+        user["id"] = str(user["_id"])
+        return user
+    except Exception:
+        return None
 
 async def get_current_admin_user(current_user: dict = Depends(get_current_user)):
     if current_user.get("role") != "admin":

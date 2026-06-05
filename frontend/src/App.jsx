@@ -20,6 +20,18 @@ import ProfilePage from './pages/ProfilePage';
 import AdminDashboard from './pages/AdminDashboard';
 import UserManagement from './pages/UserManagement';
 import AnalyticsPage from './pages/AnalyticsPage';
+import ChallengesPage from './pages/ChallengesPage';
+import ChallengeWorkspace from './pages/ChallengeWorkspace';
+import LeaderboardPage from './pages/LeaderboardPage';
+import AdminChallenges from './pages/AdminChallenges';
+import MySharedCodes from './pages/MySharedCodes';
+import SharedCodePage from './pages/SharedCodePage';
+import AssessmentsPage from './pages/AssessmentsPage';
+import AssessmentWorkspace from './pages/AssessmentWorkspace';
+import AssessmentResultPage from './pages/AssessmentResultPage';
+import MyCertificates from './pages/MyCertificates';
+import CertificateVerificationPage from './pages/CertificateVerificationPage';
+import AdminAssessments from './pages/AdminAssessments';
 
 // Main Layout Wrapper
 function MainLayout({ children }) {
@@ -80,6 +92,8 @@ export default function App() {
         <Routes>
           {/* Public Landing Route */}
           <Route path="/" element={<LandingPage />} />
+          <Route path="/share/:share_id" element={<SharedCodePage />} />
+          <Route path="/verify-certificate/:certificate_id" element={<CertificateVerificationPage />} />
 
           {/* Authentication Routes */}
           <Route 
@@ -133,10 +147,74 @@ export default function App() {
             } 
           />
           <Route 
+            path="/shared-codes" 
+            element={
+              <PrivateRoute>
+                <MySharedCodes />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/assessments" 
+            element={
+              <PrivateRoute>
+                <AssessmentsPage />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/assessments/workspace/:attemptId" 
+            element={
+              <PrivateRoute>
+                <AssessmentWorkspace />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/assessments/result/:attemptId" 
+            element={
+              <PrivateRoute>
+                <AssessmentResultPage />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/certificates" 
+            element={
+              <PrivateRoute>
+                <MyCertificates />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
             path="/history" 
             element={
               <PrivateRoute>
                 <ExecutionHistory />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/challenges" 
+            element={
+              <PrivateRoute>
+                <ChallengesPage />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/challenges/:id" 
+            element={
+              <PrivateRoute>
+                <ChallengeWorkspace />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/leaderboard" 
+            element={
+              <PrivateRoute>
+                <LeaderboardPage />
               </PrivateRoute>
             } 
           />
@@ -163,6 +241,22 @@ export default function App() {
             element={
               <AdminRoute>
                 <UserManagement />
+              </AdminRoute>
+            } 
+          />
+          <Route 
+            path="/admin/challenges" 
+            element={
+              <AdminRoute>
+                <AdminChallenges />
+              </AdminRoute>
+            } 
+          />
+          <Route 
+            path="/admin/assessments" 
+            element={
+              <AdminRoute>
+                <AdminAssessments />
               </AdminRoute>
             } 
           />

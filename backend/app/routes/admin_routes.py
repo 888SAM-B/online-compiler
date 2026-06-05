@@ -11,7 +11,10 @@ from app.models import (
     DailyExecution,
     LanguageResponse,
     LanguageStatusUpdate,
-    ActivityLogResponse
+    ActivityLogResponse,
+    ChallengeCreate,
+    ChallengeUpdate,
+    AdminChallengeResponse
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -229,3 +232,166 @@ async def get_analytics(
         most_used_language=most_used_language,
         daily_executions=daily_executions
     )
+
+
+# Helper to serialize challenge for admin
+def serialize_challenge_admin(ch: dict) -> dict:
+    ch["id"] = str(ch["_id"])
+    ch.pop("_id", None)
+    return ch
+
+@router.get("/challenges", response_model=List[AdminChallengeResponse])
+async def admin_get_challenges(
+    search: Optional[str] = Query(None),
+    current_admin: dict = Depends(get_current_admin_user),
+    db=Depends(get_db)
+):
+    query = {}
+    if search:
+        query["title"] = {"$regex": search, "$options": "i"}
+    cursor = db.coding_challenges.find(query).sort("created_at", -1)
+    challenges = await cursor.to_list(length=100)
+    return [serialize_challenge_admin(ch) for ch in challenges]
+
+@router.get("/challenges/{id}", response_model=AdminChallengeResponse)
+async def admin_get_challenge_by_id(
+    id: str,
+    current_admin: dict = Depends(get_current_admin_user),
+    db=Depends(get_db)
+):
+    if not ObjectId.is_valid(id):
+        raise HTTPException(status_code=400, detail="Invalid challenge ID format")
+    ch = await db.coding_challenges.find_one({"_id": ObjectId(id)})
+    if not ch:
+        raise HTTPException(status_code=404, detail="Challenge not found")
+    return serialize_challenge_admin(ch)
+
+@router.post("/challenges", response_model=AdminChallengeResponse)
+async def admin_create_challenge(
+    payload: ChallengeCreate,
+    current_admin: dict = Depends(get_current_admin_user),
+    db=Depends(get_db)
+):
+    doc = payload.dict()
+    doc["version"] = 1
+    doc["success_rate"] = 0.0
+    doc["total_submissions"] = 0
+    doc["total_solves"] = 0
+    doc["created_at"] = datetime.utcnow()
+    doc["updated_at"] = datetime.utcnow()
+    
+    result = await db.coding_challenges.insert_one(doc)
+    doc["id"] = str(result.inserted_id)
+    doc.pop("_id", None)
+    
+    await log_activity(
+        user_id=current_admin["id"],
+        email=current_admin["email"],
+        action="CHALLENGE_CREATED",
+        details=f"Created challenge: {payload.title} (Points: {payload.points})"
+    )
+    return doc
+
+@router.put("/challenges/{id}", response_model=AdminChallengeResponse)
+async def admin_update_challenge(
+    id: str,
+    payload: ChallengeUpdate,
+    current_admin: dict = Depends(get_current_admin_user),
+    db=Depends(get_db)
+):
+    if not ObjectId.is_valid(id):
+        raise HTTPException(status_code=400, detail="Invalid challenge ID format")
+        
+    existing = await db.coding_challenges.find_one({"_id": ObjectId(id)})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Challenge not found")
+        
+    update_data = {k: v for k, v in payload.dict().items() if v is not None}
+    update_data["version"] = existing.get("version", 1) + 1
+    update_data["updated_at"] = datetime.utcnow()
+    
+    await db.coding_challenges.update_one(
+        {"_id": ObjectId(id)},
+        {"$set": update_data}
+    )
+    
+    updated_ch = await db.coding_challenges.find_one({"_id": ObjectId(id)})
+    
+    await log_activity(
+        user_id=current_admin["id"],
+        email=current_admin["email"],
+        action="CHALLENGE_UPDATED",
+        details=f"Updated challenge: {updated_ch.get('title')} to version {updated_ch.get('version')}"
+    )
+    return serialize_challenge_admin(updated_ch)
+
+@router.delete("/challenges/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def admin_delete_challenge(
+    id: str,
+    current_admin: dict = Depends(get_current_admin_user),
+    db=Depends(get_db)
+):
+    if not ObjectId.is_valid(id):
+        raise HTTPException(status_code=400, detail="Invalid challenge ID format")
+        
+    ch = await db.coding_challenges.find_one({"_id": ObjectId(id)})
+    if not ch:
+        raise HTTPException(status_code=404, detail="Challenge not found")
+        
+    await db.coding_challenges.delete_one({"_id": ObjectId(id)})
+    await db.challenge_submissions.delete_many({"challenge_id": id})
+    await db.user_challenge_progress.delete_many({"challenge_id": id})
+    
+    await log_activity(
+        user_id=current_admin["id"],
+        email=current_admin["email"],
+        action="CHALLENGE_DELETED",
+        details=f"Deleted challenge: {ch.get('title')}"
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.post("/challenges/import", status_code=status.HTTP_201_CREATED)
+async def admin_import_challenges(
+    payload: List[ChallengeCreate],
+    current_admin: dict = Depends(get_current_admin_user),
+    db=Depends(get_db)
+):
+    docs = []
+    for item in payload:
+        doc = item.dict()
+        doc["version"] = 1
+        doc["success_rate"] = 0.0
+        doc["total_submissions"] = 0
+        doc["total_solves"] = 0
+        doc["created_at"] = datetime.utcnow()
+        doc["updated_at"] = datetime.utcnow()
+        docs.append(doc)
+        
+    if docs:
+        await db.coding_challenges.insert_many(docs)
+        
+    await log_activity(
+        user_id=current_admin["id"],
+        email=current_admin["email"],
+        action="CHALLENGE_CREATED",
+        details=f"Bulk imported {len(docs)} challenges."
+    )
+    return {"message": f"Successfully imported {len(docs)} challenges"}
+
+@router.get("/challenges/export/all")
+async def admin_export_challenges(
+    current_admin: dict = Depends(get_current_admin_user),
+    db=Depends(get_db)
+):
+    cursor = db.coding_challenges.find({})
+    challenges = await cursor.to_list(length=1000)
+    
+    exported = []
+    for ch in challenges:
+        ch_doc = {**ch}
+        ch_doc.pop("_id", None)
+        ch_doc.pop("created_at", None)
+        ch_doc.pop("updated_at", None)
+        exported.append(ch_doc)
+        
+    return exported

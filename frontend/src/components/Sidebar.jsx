@@ -9,7 +9,12 @@ import {
   ShieldAlert, 
   Users, 
   BarChart3,
-  X
+  X,
+  Trophy,
+  Target,
+  Settings,
+  Share2,
+  Award
 } from 'lucide-react';
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -24,7 +29,11 @@ export default function Sidebar({ isOpen, onClose }) {
 
   const navItems = [
     { to: '/dashboard', label: 'Code Editor', icon: <Code2 className="w-5 h-5" /> },
+    { to: '/challenges', label: 'Challenges', icon: <Target className="w-5 h-5" /> },
+    { to: '/assessments', label: 'Certifications', icon: <Award className="w-5 h-5" /> },
+    { to: '/leaderboard', label: 'Leaderboard', icon: <Trophy className="w-5 h-5" /> },
     { to: '/programs', label: 'My Programs', icon: <FolderGit2 className="w-5 h-5" /> },
+    { to: '/shared-codes', label: 'Shared Codes', icon: <Share2 className="w-5 h-5" /> },
     { to: '/history', label: 'Execution History', icon: <History className="w-5 h-5" /> },
     { to: '/profile', label: 'My Profile', icon: <User className="w-5 h-5" /> },
   ];
@@ -32,6 +41,8 @@ export default function Sidebar({ isOpen, onClose }) {
   const adminItems = [
     { to: '/admin', label: 'System Logs', icon: <ShieldAlert className="w-5 h-5" /> },
     { to: '/admin/users', label: 'User Management', icon: <Users className="w-5 h-5" /> },
+    { to: '/admin/challenges', label: 'Manage Challenges', icon: <Settings className="w-5 h-5" /> },
+    { to: '/admin/assessments', label: 'Manage Assessments', icon: <Award className="w-5 h-5" /> },
     { to: '/admin/analytics', label: 'Analytics Panel', icon: <BarChart3 className="w-5 h-5" /> },
   ];
 

@@ -3,6 +3,8 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from passlib.context import CryptContext
 from datetime import datetime
 from app.config import settings
+from app.utils.challenge_seeder import seed_challenges
+from app.utils.assessment_seeder import seed_assessments
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +43,47 @@ async def init_db():
         await db_instance.db.ai_suggestion_cache.create_index("expires_at", expireAfterSeconds=0)
         await db_instance.db.ai_suggestion_cache.create_index("cache_key", unique=True)
 
-        
+        # Coding Challenges Indexes
+        await db_instance.db.coding_challenges.create_index("status")
+        await db_instance.db.coding_challenges.create_index("category")
+        await db_instance.db.coding_challenges.create_index("difficulty")
+        await db_instance.db.challenge_submissions.create_index("user_id")
+        await db_instance.db.challenge_submissions.create_index("challenge_id")
+        await db_instance.db.challenge_submissions.create_index("submitted_at")
+        await db_instance.db.user_challenge_progress.create_index([("user_id", 1), ("challenge_id", 1)], unique=True)
+        await db_instance.db.user_achievements.create_index([("user_id", 1), ("achievement_type", 1)], unique=True)
+
+        # Code Sharing Module Indexes
+        await db_instance.db.shared_codes.create_index("share_id", unique=True)
+        await db_instance.db.shared_codes.create_index("user_id")
+        await db_instance.db.shared_codes.create_index("visibility")
+        await db_instance.db.shared_codes.create_index("expires_at", expireAfterSeconds=0)
+        await db_instance.db.share_access_logs.create_index([("share_id", 1), ("ip_address", 1), ("action", 1)])
+        await db_instance.db.share_access_logs.create_index("timestamp")
+
+        # Assessments & Certification Indexes
+        await db_instance.db.assessments.create_index("active")
+        await db_instance.db.assessments.create_index("language")
+        await db_instance.db.assessments.create_index("assessment_type")
+        await db_instance.db.assessment_questions.create_index("assessment_id")
+        await db_instance.db.assessment_questions.create_index("difficulty")
+        await db_instance.db.active_assessment_sessions.create_index("expires_at", expireAfterSeconds=0)
+        await db_instance.db.active_assessment_sessions.create_index("user_id")
+        await db_instance.db.active_assessment_sessions.create_index("assessment_id")
+        await db_instance.db.assessment_attempts.create_index("user_id")
+        await db_instance.db.assessment_attempts.create_index("assessment_id")
+        await db_instance.db.assessment_attempts.create_index("submitted_at")
+        await db_instance.db.certificates.create_index("certificate_id", unique=True)
+        await db_instance.db.certificates.create_index("user_id")
+
         # Seed supported languages
         await seed_languages()
+        
+        # Seed challenges
+        await seed_challenges(db_instance.db)
+
+        # Seed assessments
+        await seed_assessments(db_instance.db)
         
         # Seed admin user
         await seed_admin()

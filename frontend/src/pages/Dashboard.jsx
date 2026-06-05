@@ -27,15 +27,31 @@ export default function Dashboard() {
   const [modalOpen, setModalOpen] = useState(false);
   const [newProgram, setNewProgram] = useState({ title: '', language: 'python' });
 
+  const [challengesProgress, setChallengesProgress] = useState(null);
+  const [shareAnalytics, setShareAnalytics] = useState(null);
+  const [certificates, setCertificates] = useState([]);
+
   // Fetch initial data
   const fetchData = async () => {
     try {
-      const [progRes, histRes] = await Promise.all([
+      const [progRes, histRes, chalRes, shareRes, certRes] = await Promise.all([
         api.get('/programs'),
-        api.get('/history')
+        api.get('/history'),
+        api.get('/challenges/progress').catch(() => ({ data: null })),
+        api.get('/share/my/analytics').catch(() => ({ data: null })),
+        api.get('/assessments/certificates').catch(() => ({ data: [] }))
       ]);
       setPrograms(progRes.data);
       setHistory(histRes.data);
+      if (chalRes && chalRes.data) {
+        setChallengesProgress(chalRes.data);
+      }
+      if (shareRes && shareRes.data) {
+        setShareAnalytics(shareRes.data);
+      }
+      if (certRes && certRes.data) {
+        setCertificates(certRes.data);
+      }
     } catch (err) {
       setToast({ message: 'Failed to fetch dashboard data', type: 'error' });
     } finally {
@@ -140,7 +156,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-6 mb-8">
         <div className="glass p-6 rounded-2xl flex items-center gap-5">
           <div className="bg-brand-purple/10 text-brand-purple p-4 rounded-2xl">
             <FolderHeart className="w-6 h-6" />
@@ -168,7 +184,79 @@ export default function Dashboard() {
             <p className="text-2xl font-bold mt-1 capitalize">{favoriteLanguage}</p>
           </div>
         </div>
+        <div className="glass p-6 rounded-2xl flex items-center gap-5">
+          <div className="bg-brand-purple/10 text-brand-purple p-4 rounded-2xl">
+            <ShieldCheck className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Certifications</p>
+            <p className="text-2xl font-bold mt-1">{certificates.length}</p>
+          </div>
+        </div>
       </div>
+
+      {/* Challenge Stats Row */}
+      {challengesProgress && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+          <div className="glass p-5 rounded-2xl">
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Score</p>
+            <p className="text-xl font-black text-brand-purple mt-1">{challengesProgress.total_score} pts</p>
+          </div>
+          <div className="glass p-5 rounded-2xl">
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Solved</p>
+            <p className="text-xl font-black text-white mt-1">{challengesProgress.total_solved} / {challengesProgress.total_challenges}</p>
+          </div>
+          <div className="glass p-5 rounded-2xl">
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Best Language</p>
+            <p className="text-xl font-black text-white mt-1">{challengesProgress.best_language}</p>
+          </div>
+          <div className="glass p-5 rounded-2xl">
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Global Rank</p>
+            <p className="text-xl font-black text-brand-green mt-1">#{challengesProgress.global_rank}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Sharing Performance Section */}
+      {shareAnalytics && shareAnalytics.total_shares > 0 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-bold mb-4">Sharing Performance & Analytics</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="glass p-5 rounded-2xl">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Total Shares</p>
+              <p className="text-xl font-black text-brand-purple mt-1">{shareAnalytics.total_shares}</p>
+            </div>
+            <div className="glass p-5 rounded-2xl">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Accumulated Views</p>
+              <p className="text-xl font-black text-white mt-1">{shareAnalytics.total_views}</p>
+            </div>
+            <div className="glass p-5 rounded-2xl">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Accumulated Forks</p>
+              <p className="text-xl font-black text-brand-teal mt-1">{shareAnalytics.total_forks}</p>
+            </div>
+            <div className="glass p-5 rounded-2xl">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Average View Rate</p>
+              <p className="text-xl font-black text-brand-green mt-1">{shareAnalytics.average_views} / share</p>
+            </div>
+          </div>
+          {(shareAnalytics.most_viewed || shareAnalytics.most_forked) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+              {shareAnalytics.most_viewed && (
+                <div className="glass p-4 rounded-xl">
+                  <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Most Viewed Snippet</span>
+                  <p className="text-sm font-semibold text-gray-200 mt-0.5 truncate">{shareAnalytics.most_viewed}</p>
+                </div>
+              )}
+              {shareAnalytics.most_forked && (
+                <div className="glass p-4 rounded-xl">
+                  <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Most Forked Snippet</span>
+                  <p className="text-sm font-semibold text-gray-200 mt-0.5 truncate">{shareAnalytics.most_forked}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Main Sections */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -244,44 +332,95 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Execution Logs */}
-        <div className="glass p-6 rounded-2xl flex flex-col">
-          <h2 className="text-lg font-bold mb-4">Recent Executions</h2>
-          <div className="flex-1 flex flex-col gap-3.5 overflow-y-auto max-h-[350px]">
-            {history.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-gray-600 italic text-xs py-12 gap-2">
-                <Clock className="w-10 h-10 text-gray-700" />
-                <span>No executions recorded.</span>
+        {/* Execution Logs + Achievements Sidebar */}
+        <div className="flex flex-col gap-8">
+          
+          {/* Difficulty breakdown & Achievements panel */}
+          {challengesProgress && (
+            <div className="glass p-6 rounded-2xl flex flex-col gap-5">
+              <div>
+                <h2 className="text-lg font-bold mb-1">Challenge Analytics</h2>
+                <p className="text-[11px] text-gray-500">Progress metrics by difficulty rating.</p>
               </div>
-            ) : (
-              history.slice(0, 8).map((hist) => (
-                <div key={hist.id} className="bg-dark-950/60 border border-white/5 rounded-xl p-3.5 flex items-center justify-between text-xs">
-                  <div className="flex flex-col gap-1">
-                    <span className="font-semibold text-gray-300 capitalize flex items-center gap-1.5">
-                      {hist.status === 'success' ? (
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                      ) : (
-                        <AlertOctagon className="w-3.5 h-3.5 text-rose-500" />
-                      )}
-                      {hist.language}
-                    </span>
-                    <span className="text-[10px] text-gray-500">
-                      {new Date(hist.executed_at).toLocaleTimeString()} — {hist.execution_time}s
-                    </span>
-                  </div>
-                  <div className="text-gray-500 font-mono text-[10px]">
-                    {hist.status === 'success' ? 'SUCCESS' : 'FAILED'}
-                  </div>
+
+              {/* Difficulty stats breakdown */}
+              <div className="flex flex-col gap-2 text-xs">
+                <div className="flex items-center justify-between p-2.5 bg-dark-950/40 border border-white/5 rounded-xl">
+                  <span className="text-emerald-400 font-bold uppercase tracking-wider text-[10px]">Easy Solved</span>
+                  <span className="font-black text-white">{challengesProgress.easy_solved}</span>
                 </div>
-              ))
+                <div className="flex items-center justify-between p-2.5 bg-dark-950/40 border border-white/5 rounded-xl">
+                  <span className="text-amber-400 font-bold uppercase tracking-wider text-[10px]">Medium Solved</span>
+                  <span className="font-black text-white">{challengesProgress.medium_solved}</span>
+                </div>
+                <div className="flex items-center justify-between p-2.5 bg-dark-950/40 border border-white/5 rounded-xl">
+                  <span className="text-rose-400 font-bold uppercase tracking-wider text-[10px]">Hard Solved</span>
+                  <span className="font-black text-white">{challengesProgress.hard_solved}</span>
+                </div>
+              </div>
+
+              {/* Achievements badges */}
+              <div className="border-t border-white/5 pt-4">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Unlocked Achievements</h3>
+                {challengesProgress.achievements.length === 0 ? (
+                  <p className="text-xs text-gray-500 italic">No achievements unlocked yet.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {challengesProgress.achievements.map((ach) => (
+                      <span 
+                        key={ach.achievement_type}
+                        className="bg-brand-purple/10 border border-brand-purple/20 text-brand-purple text-[10px] font-black uppercase px-2.5 py-1.5 rounded-xl shadow-lg shadow-brand-purple/5"
+                        title={`Unlocked at ${new Date(ach.unlocked_at).toLocaleString()}`}
+                      >
+                        {ach.achievement_type.replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Execution Logs */}
+          <div className="glass p-6 rounded-2xl flex flex-col">
+            <h2 className="text-lg font-bold mb-4">Recent Executions</h2>
+            <div className="flex-1 flex flex-col gap-3.5 overflow-y-auto max-h-[250px]">
+              {history.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-gray-600 italic text-xs py-12 gap-2">
+                  <Clock className="w-10 h-10 text-gray-700" />
+                  <span>No executions recorded.</span>
+                </div>
+              ) : (
+                history.slice(0, 8).map((hist) => (
+                  <div key={hist.id} className="bg-dark-950/60 border border-white/5 rounded-xl p-3.5 flex items-center justify-between text-xs">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-semibold text-gray-300 capitalize flex items-center gap-1.5">
+                        {hist.status === 'success' ? (
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                        ) : (
+                          <AlertOctagon className="w-3.5 h-3.5 text-rose-500" />
+                        )}
+                        {hist.language}
+                      </span>
+                      <span className="text-[10px] text-gray-500">
+                        {new Date(hist.executed_at).toLocaleTimeString()} — {hist.execution_time}s
+                      </span>
+                    </div>
+                    <div className="text-gray-500 font-mono text-[10px]">
+                      {hist.status === 'success' ? 'SUCCESS' : 'FAILED'}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            {history.length > 8 && (
+              <Link to="/history" className="text-xs text-brand-purple hover:underline font-semibold mt-4 flex items-center gap-1 self-start">
+                Full history log
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
             )}
           </div>
-          {history.length > 8 && (
-            <Link to="/history" className="text-xs text-brand-purple hover:underline font-semibold mt-4 flex items-center gap-1 self-start">
-              Full history log
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          )}
+
         </div>
       </div>
 
