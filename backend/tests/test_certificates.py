@@ -123,6 +123,18 @@ async def test_pdf_generation_and_download(test_db_setup):
         assert response_guest.headers["content-type"] == "application/pdf"
         assert len(response_guest.content) > 0
 
+    # 3. Test self-healing / regeneration when PDF is deleted from disk
+    if os.path.exists(pdf_path):
+        os.remove(pdf_path)
+    assert os.path.exists(pdf_path) is False
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        response_rebuild = await ac.get(f"/api/assessments/certificates/{cert_id}/download")
+        assert response_rebuild.status_code == 200
+        assert response_rebuild.headers["content-type"] == "application/pdf"
+        assert len(response_rebuild.content) > 0
+        assert os.path.exists(pdf_path) is True
+
     # Cleanup pdf file from disk
     if os.path.exists(pdf_path):
         os.remove(pdf_path)

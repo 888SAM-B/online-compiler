@@ -705,7 +705,23 @@ async def download_certificate(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate not found or revoked.")
 
     if not os.path.exists(cert["pdf_path"]):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate PDF file not found on disk.")
+        user = await db.users.find_one({"_id": cert["user_id"]})
+        assess = await db.assessments.find_one({"_id": cert["assessment_id"]})
+        if not user or not assess:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Certificate metadata references missing user or assessment.")
+        try:
+            generate_certificate_pdf(
+                certificate_id=cert["certificate_id"],
+                username=user["name"],
+                assessment_title=assess["title"],
+                badge=cert["badge"],
+                percentage=cert["percentage"]
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to regenerate certificate PDF: {str(e)}"
+            )
 
     user_id = current_user["id"] if current_user else None
     email = current_user["email"] if current_user else None
@@ -718,11 +734,15 @@ async def download_certificate(
         details=details_str
     )
 
-    return FileResponse(
+    response = FileResponse(
         path=cert["pdf_path"],
         filename=f"certificate_{certificate_id}.pdf",
         media_type="application/pdf"
     )
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @router.get("/certificates/verify/{certificate_id}", response_model=CertificateVerifyResponse)
 async def verify_certificate(

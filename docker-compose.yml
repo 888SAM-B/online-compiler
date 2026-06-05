@@ -18,6 +18,7 @@ services:
     container_name: compiler_backend
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - uploads_data:/app/uploads
     environment:
       - MONGO_URI=mongodb://mongodb:27017
       - JWT_SECRET=${JWT_SECRET}
@@ -68,6 +69,7 @@ services:
 
 volumes:
   mongo_data:
+  uploads_data:
 
 networks:
   compiler_network:
