@@ -17,10 +17,10 @@ services:
       dockerfile: Dockerfile
     container_name: compiler_backend
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - uploads_data:/app/uploads
     environment:
       - MONGO_URI=mongodb://mongodb:27017
+      - REDIS_URI=redis://redis:6379
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRE=30
       - BREVO_SMTP_HOST=${BREVO_SMTP_HOST}
@@ -33,9 +33,42 @@ services:
       - "8000:8000"
     depends_on:
       - mongodb
+      - redis
     networks:
       - compiler_network
     restart: unless-stopped
+
+  redis:
+    image: redis:alpine
+    container_name: compiler_redis
+    networks:
+      - compiler_network
+    restart: unless-stopped
+
+  worker:
+    image: compiler_backend:latest
+    container_name: compiler_worker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - uploads_data:/app/uploads
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017
+      - REDIS_URI=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - BREVO_SMTP_HOST=${BREVO_SMTP_HOST}
+      - BREVO_SMTP_PORT=${BREVO_SMTP_PORT}
+      - BREVO_SMTP_USER=${BREVO_SMTP_USER}
+      - BREVO_SMTP_PASSWORD=${BREVO_SMTP_PASSWORD}
+      - FROM_EMAIL=${FROM_EMAIL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    command: ["python", "-m", "app.services.execution_worker"]
+    depends_on:
+      - redis
+      - mongodb
+    networks:
+      - compiler_network
+    restart: unless-stopped
+
 
   frontend:
     image: compiler_frontend:latest

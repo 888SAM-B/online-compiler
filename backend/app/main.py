@@ -8,6 +8,7 @@ from app.config import settings
 from app.database import init_db
 from app.executor import pre_pull_all_images
 from app.routes import auth_routes, program_routes, execute_routes, admin_routes, ai_routes, challenge_routes, share_routes, assessment_routes, admin_assessment_routes
+from app.routes import auth_routes, program_routes, execute_routes, admin_routes, ai_routes, challenge_routes, share_routes, assessment_routes, admin_assessment_routes, terminal_routes
 
 
 # Configure logging
@@ -57,6 +58,8 @@ app.include_router(challenge_routes.router, prefix=settings.API_V1_STR)
 app.include_router(share_routes.router, prefix=settings.API_V1_STR)
 app.include_router(assessment_routes.router, prefix=settings.API_V1_STR)
 app.include_router(admin_assessment_routes.router, prefix=settings.API_V1_STR)
+app.include_router(terminal_routes.router)
+
 
 @app.get("/")
 def read_root():
