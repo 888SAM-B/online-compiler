@@ -16,17 +16,19 @@ import {
 } from 'lucide-react';
 import api from '../api';
 import Loader from '../components/Loader';
-import Toast from '../components/Toast';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 const CATEGORIES = ['Arrays', 'Strings', 'Math', 'Loops', 'Functions', 'Recursion', 'Searching', 'Sorting'];
 const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
 const STATUSES = ['draft', 'active', 'archived'];
 
 export default function AdminChallenges() {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [challenges, setChallenges] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [toast, setToast] = useState(null);
   
   // Search/Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,21 +140,28 @@ export default function AdminChallenges() {
       setIsModalOpen(true);
     } catch (err) {
       console.error('Failed to load challenge for edit:', err);
-      setToast({ message: 'Error loading challenge detail.', type: 'error' });
+      toast.error('Error loading challenge detail.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id, title) => {
-    if (!window.confirm(`Are you sure you want to delete "${title}"? This will clear all submission history.`)) return;
+    const ok = await confirm({
+      title: 'Delete Challenge',
+      message: `Are you sure you want to delete "${title}"? This will clear all submission history and cannot be undone.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      danger: true
+    });
+    if (!ok) return;
     try {
       await api.delete(`/admin/challenges/${id}`);
-      setToast({ message: 'Challenge deleted successfully.', type: 'success' });
+      toast.success('Challenge deleted successfully.');
       fetchChallenges();
     } catch (err) {
       console.error('Delete failed:', err);
-      setToast({ message: 'Failed to delete challenge.', type: 'error' });
+      toast.error('Failed to delete challenge.');
     }
   };
 
@@ -173,7 +182,7 @@ export default function AdminChallenges() {
     const filteredHidden = hiddenTestCases.filter(t => t.input.trim() || t.expected_output.trim());
 
     if (filteredSamples.length === 0 || filteredHidden.length === 0) {
-      alert('You must provide at least one sample test case and one hidden test case.');
+      toast.warning('You must provide at least one sample test case and one hidden test case.');
       return;
     }
 
@@ -200,16 +209,16 @@ export default function AdminChallenges() {
     try {
       if (editingId) {
         await api.put(`/admin/challenges/${editingId}`, payload);
-        setToast({ message: 'Challenge updated successfully.', type: 'success' });
+        toast.success('Challenge updated successfully.');
       } else {
         await api.post('/admin/challenges', payload);
-        setToast({ message: 'Challenge created successfully.', type: 'success' });
+        toast.success('Challenge created successfully.');
       }
       setIsModalOpen(false);
       fetchChallenges();
     } catch (err) {
       console.error('Save challenge error:', err);
-      setToast({ message: 'Failed to save coding challenge.', type: 'error' });
+      toast.error('Failed to save coding challenge.');
     }
   };
 
@@ -227,11 +236,11 @@ export default function AdminChallenges() {
       try {
         const challengesList = JSON.parse(event.target.result);
         await api.post('/admin/challenges/import', challengesList);
-        setToast({ message: 'Challenges bulk imported successfully!', type: 'success' });
+        toast.success('Challenges bulk imported successfully!');
         fetchChallenges();
       } catch (err) {
         console.error('Import failed:', err);
-        setToast({ message: 'Invalid JSON challenge list format.', type: 'error' });
+        toast.error('Invalid JSON challenge list format.');
       }
     };
     reader.readAsText(file);
@@ -249,10 +258,10 @@ export default function AdminChallenges() {
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
-      setToast({ message: 'Exported challenges successfully!', type: 'success' });
+      toast.success('Exported challenges successfully!');
     } catch (err) {
       console.error('Export failed:', err);
-      setToast({ message: 'Failed to export challenges.', type: 'error' });
+      toast.error('Failed to export challenges.');
     }
   };
 
@@ -745,13 +754,6 @@ export default function AdminChallenges() {
         </div>
       )}
 
-      {toast && (
-        <Toast 
-          message={toast.message} 
-          type={toast.type} 
-          onClose={() => setToast(null)} 
-        />
-      )}
     </div>
   );
 }

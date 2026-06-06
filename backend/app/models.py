@@ -417,6 +417,23 @@ class AdminAssessmentAnalyticsResponse(BaseModel):
     bronze_badges: int
     certificates_generated: int
 
+class ImportPreviewResponse(BaseModel):
+    valid: bool
+    total_questions: int
+    easy: int
+    medium: int
+    hard: int
+    duplicates_found: int
+    validation_errors: List[str]
+
+class ImportSummaryResponse(BaseModel):
+    success: bool
+    imported_count: int
+    import_batch_id: str
+    assessment_title: str
+    message: str
+
+
 
 
 

@@ -177,59 +177,12 @@ async def start_assessment(
 
     user_id = ObjectId(current_user["id"])
 
-    # 1. Active Session Validation / Resume Support
+    # 1. Active Session Validation / Auto-Submit Active Session
     active_session = await db.active_assessment_sessions.find_one({"user_id": user_id})
     if active_session:
-        # Check if active session has expired
-        if datetime.utcnow() > active_session["expires_at"]:
-            await check_and_auto_submit_session(active_session, db)
-        else:
-            # Active Session Lock: check if it's the SAME assessment
-            if active_session["assessment_id"] == ObjectId(id):
-                # Resume attempt! Retrieve attempt details
-                attempt = await db.assessment_attempts.find_one({"_id": active_session["attempt_id"]})
-                if attempt and attempt["status"] == "active":
-                    # Fetch questions in their correct shuffled order
-                    q_ids = [ObjectId(qid) for qid in attempt["question_order"]]
-                    db_questions = await db.assessment_questions.find({"_id": {"$in": q_ids}}).to_list(length=100)
-                    
-                    # Sort to match question_order
-                    q_map = {str(q["_id"]): q for q in db_questions}
-                    sorted_questions = []
-                    for qid in attempt["question_order"]:
-                        if qid in q_map:
-                            q_data = q_map[qid]
-                            # Use stored shuffled options
-                            options = attempt["shuffled_options"].get(qid, q_data["options"])
-                            sorted_questions.append(
-                                QuestionResponse(
-                                    id=qid,
-                                    question_text=q_data["question_text"],
-                                    options=options
-                                )
-                            )
-                            
-                    await log_activity(
-                        user_id=current_user["id"],
-                        email=current_user["email"],
-                        action="ASSESSMENT_RESUMED",
-                        details=f"Resumed active assessment: {assessment['title']}"
-                    )
-                    
-                    return AttemptStartResponse(
-                        attempt_id=str(attempt["_id"]),
-                        assessment_title=assessment["title"],
-                        duration_minutes=assessment["duration_minutes"],
-                        expires_at=active_session["expires_at"],
-                        questions=sorted_questions,
-                        answers=attempt.get("answers", [])
-                    )
-            
-            # Locked to another assessment
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="You have another active assessment session in progress. Please complete or wait for it to expire first."
-            )
+        # Auto-submit any existing active session immediately (no resume allowed)
+        await check_and_auto_submit_session(active_session, db)
+
 
     # 2. Max Attempts Validation
     attempts_count = await db.assessment_attempts.count_documents({
@@ -274,8 +227,30 @@ async def start_assessment(
             detail="Insufficient questions in the database pool for this assessment."
         )
 
-    # Shuffled selection
-    selected_questions = random.sample(questions_pool, assessment["questions_per_attempt"])
+    # Find previous attempts of this user for this assessment
+    previous_attempts = await db.assessment_attempts.find({
+        "user_id": user_id,
+        "assessment_id": ObjectId(id)
+    }).to_list(length=100)
+    
+    seen_question_ids = set()
+    for att in previous_attempts:
+        for qid in att.get("question_order", []):
+            seen_question_ids.add(str(qid))
+
+    # Filter unseen questions
+    unseen_questions = [q for q in questions_pool if str(q["_id"]) not in seen_question_ids]
+
+    if len(unseen_questions) >= assessment["questions_per_attempt"]:
+        # We have enough unseen questions, take them
+        selected_questions = random.sample(unseen_questions, assessment["questions_per_attempt"])
+    else:
+        # Top up with seen questions if pool is depleted
+        topup_needed = assessment["questions_per_attempt"] - len(unseen_questions)
+        seen_pool = [q for q in questions_pool if str(q["_id"]) in seen_question_ids]
+        topup_questions = random.sample(seen_pool, min(topup_needed, len(seen_pool)))
+        selected_questions = unseen_questions + topup_questions
+
     random.shuffle(selected_questions)
 
     # Map question order and shuffle options for every question

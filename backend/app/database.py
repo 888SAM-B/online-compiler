@@ -67,6 +67,8 @@ async def init_db():
         await db_instance.db.assessments.create_index("assessment_type")
         await db_instance.db.assessment_questions.create_index("assessment_id")
         await db_instance.db.assessment_questions.create_index("difficulty")
+        await db_instance.db.assessment_questions.create_index([("assessment_id", 1), ("question_number", 1)])
+        await db_instance.db.assessment_questions.create_index([("assessment_id", 1), ("import_batch_id", 1)])
         await db_instance.db.active_assessment_sessions.create_index("expires_at", expireAfterSeconds=0)
         await db_instance.db.active_assessment_sessions.create_index("user_id")
         await db_instance.db.active_assessment_sessions.create_index("assessment_id")

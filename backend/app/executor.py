@@ -3,9 +3,45 @@ import time
 import base64
 import docker
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# All Docker images used by supported languages
+LANGUAGE_IMAGES = [
+    "python:3.12-slim",
+    "node:20-alpine",
+    "gcc:latest",
+    "eclipse-temurin:21",
+]
+
+def _pull_single_image(image: str) -> tuple[str, bool, str]:
+    """Pull a single Docker image. Returns (image, success, message)."""
+    try:
+        client = get_docker_client()
+        try:
+            client.images.get(image)
+            return (image, True, "already exists")
+        except docker.errors.ImageNotFound:
+            logger.info(f"[Startup] Pulling image: {image} ...")
+            client.images.pull(image)
+            return (image, True, "pulled successfully")
+    except Exception as e:
+        return (image, False, str(e))
+
+def pre_pull_all_images():
+    """Pull all language Docker images in parallel at startup."""
+    logger.info("[Startup] Pre-pulling all language Docker images...")
+    with ThreadPoolExecutor(max_workers=len(LANGUAGE_IMAGES)) as executor:
+        futures = {executor.submit(_pull_single_image, img): img for img in LANGUAGE_IMAGES}
+        for future in as_completed(futures):
+            image, success, msg = future.result()
+            if success:
+                logger.info(f"[Startup] ✅ {image}: {msg}")
+            else:
+                logger.warning(f"[Startup] ⚠️  {image}: FAILED — {msg}")
+    logger.info("[Startup] Image pre-pull complete.")
 
 def get_docker_client():
     try:

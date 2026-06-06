@@ -20,8 +20,13 @@ import {
 } from 'lucide-react';
 import api from '../api';
 import Loader from '../components/Loader';
+import QuestionImportModal from '../components/QuestionImportModal';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 export default function AdminAssessments() {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [assessments, setAssessments] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -33,6 +38,7 @@ export default function AdminAssessments() {
   const [questions, setQuestions] = useState([]);
   const [showAssessModal, setShowAssessModal] = useState(false);
   const [showQuestionsModal, setShowQuestionsModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   
   // Form States
   const [assessForm, setAssessForm] = useState({
@@ -88,36 +94,53 @@ export default function AdminAssessments() {
         // Update
         const res = await api.put(`/admin/assessments/${assessForm.id}`, assessForm);
         setAssessments(prev => prev.map(a => a.id === res.data.id ? res.data : a));
+        toast.success('Assessment updated successfully!');
       } else {
         // Create
         const res = await api.post('/admin/assessments', assessForm);
         setAssessments(prev => [...prev, res.data]);
+        toast.success('Assessment created successfully!');
       }
       setShowAssessModal(false);
       resetAssessForm();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to save assessment');
+      toast.error(err.response?.data?.detail || 'Failed to save assessment');
     }
   };
 
   const handleDeleteAssessment = async (id, title) => {
-    if (!window.confirm(`Are you sure you want to delete ${title}?`)) return;
+    const ok = await confirm({
+      title: 'Delete Assessment',
+      message: `Are you sure you want to permanently delete "${title}" and all its questions?`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      danger: true
+    });
+    if (!ok) return;
     try {
       await api.delete(`/admin/assessments/${id}`);
       setAssessments(prev => prev.filter(a => a.id !== id));
+      toast.success(`Assessment "${title}" deleted.`);
     } catch (err) {
-      alert('Failed to delete assessment');
+      toast.error('Failed to delete assessment');
     }
   };
 
   const handleRegeneratePool = async (id, title) => {
-    if (!window.confirm(`Regenerate question pool for ${title}? This will increment the pool version and force terminate any active student test sessions.`)) return;
+    const ok = await confirm({
+      title: 'Regenerate Question Pool',
+      message: `Regenerate question pool for "${title}"? This will increment the pool version and force-terminate all active student sessions.`,
+      confirmText: 'Regenerate',
+      cancelText: 'Cancel',
+      danger: false
+    });
+    if (!ok) return;
     try {
       const res = await api.post(`/admin/assessments/${id}/regenerate`);
-      alert(`Successfully regenerated! New Version is ${res.data.new_version}`);
+      toast.success(`Pool regenerated! New Version: v${res.data.new_version}`);
       fetchData();
     } catch (err) {
-      alert('Failed to regenerate pool version');
+      toast.error('Failed to regenerate pool version');
     }
   };
 
@@ -151,7 +174,7 @@ export default function AdminAssessments() {
       setQuestions(filtered);
       setShowQuestionsModal(true);
     } catch (err) {
-      alert('Failed to load questions list');
+      toast.error('Failed to load questions list');
     } finally {
       setLoading(false);
     }
@@ -160,7 +183,7 @@ export default function AdminAssessments() {
   const handleAddQuestion = async (e) => {
     e.preventDefault();
     if (!questionForm.correct_answer || !questionForm.options.includes(questionForm.correct_answer)) {
-      alert('Correct answer must match one of the four options!');
+      toast.warning('Correct answer must match one of the four options!');
       return;
     }
 
@@ -169,26 +192,34 @@ export default function AdminAssessments() {
         // Update Question
         const res = await api.put(`/admin/assessments/questions/${questionForm.id}`, questionForm);
         setQuestions(prev => prev.map(q => q.id === res.data.id ? res.data : q));
-        alert('Question updated successfully!');
+        toast.success('Question updated successfully!');
       } else {
         // Create Question
         const res = await api.post(`/admin/assessments/${selectedAssess.id}/questions`, questionForm);
         setQuestions(prev => [...prev, res.data]);
-        alert('Question added successfully!');
+        toast.success('Question added successfully!');
       }
       resetQuestionForm();
     } catch (err) {
-      alert('Failed to save question');
+      toast.error('Failed to save question');
     }
   };
 
   const handleDeleteQuestion = async (qId) => {
-    if (!window.confirm('Are you sure you want to deactivate/delete this question?')) return;
+    const ok = await confirm({
+      title: 'Remove Question',
+      message: 'Are you sure you want to remove this question from the pool?',
+      confirmText: 'Remove',
+      cancelText: 'Cancel',
+      danger: true
+    });
+    if (!ok) return;
     try {
       await api.delete(`/admin/assessments/questions/${qId}`);
       setQuestions(prev => prev.filter(q => q.id !== qId));
+      toast.success('Question removed from pool.');
     } catch (err) {
-      alert('Failed to delete question');
+      toast.error('Failed to delete question');
     }
   };
 
@@ -203,7 +234,7 @@ export default function AdminAssessments() {
       downloadAnchor.click();
       downloadAnchor.remove();
     } catch (err) {
-      alert('Failed to export assessments JSON');
+      toast.error('Failed to export assessments JSON');
     }
   };
 
@@ -216,15 +247,15 @@ export default function AdminAssessments() {
       try {
         const payload = JSON.parse(event.target.result);
         if (!payload.assessments || !payload.questions) {
-          alert('Invalid JSON file format. Must contain assessments and questions keys.');
+          toast.error('Invalid JSON file format. Must contain assessments and questions keys.');
           return;
         }
 
         const res = await api.post('/admin/assessments/import', payload);
-        alert(`Successfully imported ${res.data.imported_assessments} assessments and ${res.data.imported_questions} questions!`);
+        toast.success(`Imported ${res.data.imported_assessments} assessments and ${res.data.imported_questions} questions!`);
         fetchData();
       } catch (err) {
-        alert('Failed to parse or import JSON. Ensure valid JSON Schema.');
+        toast.error('Failed to parse or import JSON. Ensure valid JSON Schema.');
       }
     };
     fileReader.readAsText(file);
@@ -360,6 +391,16 @@ export default function AdminAssessments() {
                   >
                     <HelpCircle className="w-3.5 h-3.5 text-brand-purple" />
                     Questions
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedAssess(a);
+                      setShowImportModal(true);
+                    }}
+                    className="px-3 py-2 rounded-xl bg-dark-950 border border-white/5 hover:border-white/10 text-gray-300 hover:text-white text-xs font-bold transition-all flex items-center gap-1.5"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-brand-green animate-pulse" />
+                    Import Bank
                   </button>
                   <button
                     onClick={() => handleRegeneratePool(a.id, a.title)}
@@ -850,6 +891,17 @@ export default function AdminAssessments() {
             </div>
           </div>
         </div>
+      )}
+      {/* Question Import Modal */}
+      {showImportModal && selectedAssess && (
+        <QuestionImportModal
+          assessment={selectedAssess}
+          onClose={() => {
+            setShowImportModal(false);
+            setSelectedAssess(null);
+          }}
+          onSuccess={fetchData}
+        />
       )}
     </div>
   );

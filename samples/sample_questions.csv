@@ -1,0 +1,6 @@
+question_number,question_text,option_1,option_2,option_3,option_4,correct_answer,difficulty,explanation,points
+1,"What is the output of print(type([]) is list) in Python?",True,False,Error,None,True,easy,The expression [] creates a new list object so its type is list.,1
+2,Which of the following data structures in Python is mutable?,List,Tuple,String,Integer,List,easy,"Lists can be modified after creation, while tuples cannot.",1
+3,What does the 'self' keyword represent inside a Python class method?,The class itself,The current instance of the class,A global variable reference,A private decorator definition,The current instance of the class,medium,self refers to the specific object instance calling the method.,2
+4,Which built-in Python function can be used to read a line from standard input?,input(),read(),sys.readline(),scan(),input(),easy,input() reads a line from stdin as a string.,1
+5,What is the time complexity of searching for an element in a balanced Binary Search Tree (BST) in the average case?,O(1),O(log n),O(n),O(n log n),O(log n),hard,Each step in a balanced BST halves the search space.,3
