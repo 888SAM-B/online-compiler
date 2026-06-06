@@ -1,0 +1,74 @@
+{
+  "questions": [
+    {
+      "question_number": 1,
+      "question_text": "What is the output of print(type([]) is list) in Python?",
+      "options": [
+        "True",
+        "False",
+        "Error",
+        "None"
+      ],
+      "correct_answer": "True",
+      "difficulty": "easy",
+      "explanation": "The expression [] creates a new list object, so its type is indeed list.",
+      "points": 1
+    },
+    {
+      "question_number": 2,
+      "question_text": "Which of the following data structures in Python is mutable?",
+      "options": [
+        "List",
+        "Tuple",
+        "String",
+        "Integer"
+      ],
+      "correct_answer": "List",
+      "difficulty": "easy",
+      "explanation": "Lists can be changed after creation (mutable), whereas tuples, strings, and integers cannot.",
+      "points": 1
+    },
+    {
+      "question_number": 3,
+      "question_text": "What does the 'self' keyword represent inside a Python class method?",
+      "options": [
+        "The class itself",
+        "The current instance of the class",
+        "A global variable reference",
+        "A private decorator definition"
+      ],
+      "correct_answer": "The current instance of the class",
+      "difficulty": "medium",
+      "explanation": "By convention, 'self' refers to the specific object instance calling the method.",
+      "points": 2
+    },
+    {
+      "question_number": 4,
+      "question_text": "Which built-in Python function can be used to read a line from standard input?",
+      "options": [
+        "input()",
+        "read()",
+        "sys.readline()",
+        "scan()"
+      ],
+      "correct_answer": "input()",
+      "difficulty": "easy",
+      "explanation": "input() reads a line from the user input and returns it as a string.",
+      "points": 1
+    },
+    {
+      "question_number": 5,
+      "question_text": "What is the time complexity of searching for an element in a balanced Binary Search Tree (BST) in the average case?",
+      "options": [
+        "O(1)",
+        "O(log n)",
+        "O(n)",
+        "O(n log n)"
+      ],
+      "correct_answer": "O(log n)",
+      "difficulty": "hard",
+      "explanation": "Each comparison in a balanced BST halves the remaining search space, leading to logarithmic search time.",
+      "points": 3
+    }
+  ]
+}

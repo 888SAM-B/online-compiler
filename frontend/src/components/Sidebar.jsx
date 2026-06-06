@@ -43,6 +43,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/admin/users', label: 'User Management', icon: <Users className="w-5 h-5" /> },
     { to: '/admin/challenges', label: 'Manage Challenges', icon: <Settings className="w-5 h-5" /> },
     { to: '/admin/assessments', label: 'Manage Assessments', icon: <Award className="w-5 h-5" /> },
+    { to: '/admin/certificates', label: 'Manage Certificates', icon: <Award className="w-5 h-5 text-amber-400" /> },
     { to: '/admin/analytics', label: 'Analytics Panel', icon: <BarChart3 className="w-5 h-5" /> },
   ];
 

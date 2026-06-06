@@ -16,12 +16,14 @@ import {
 } from 'lucide-react';
 import api from '../api';
 import Loader from '../components/Loader';
-import Toast from '../components/Toast';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 export default function MySharedCodes() {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [shares, setShares] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
 
   const fetchShares = async () => {
@@ -29,7 +31,7 @@ export default function MySharedCodes() {
       const res = await api.get('/share/my');
       setShares(res.data);
     } catch (err) {
-      setToast({ message: 'Failed to fetch shared snippets.', type: 'error' });
+      toast.error('Failed to fetch shared snippets.');
     } finally {
       setLoading(false);
     }
@@ -45,7 +47,7 @@ export default function MySharedCodes() {
       await navigator.clipboard.writeText(shareUrl);
       setCopiedId(shareId);
       setTimeout(() => setCopiedId(null), 2000);
-      setToast({ message: 'Share link copied!', type: 'success' });
+      toast.success('Share link copied!');
       
       // Track copy action in backend
       await api.post(`/share/${shareId}/copy`).catch(() => {});
@@ -58,16 +60,21 @@ export default function MySharedCodes() {
   };
 
   const handleDelete = async (shareId, title) => {
-    if (!window.confirm(`Are you sure you want to delete the shared snippet "${title}"?\nThis action cannot be undone and the link will no longer work.`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Delete Share Link',
+      message: `Are you sure you want to delete the shared snippet "${title}"? This action cannot be undone and the link will no longer work.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      danger: true
+    });
+    if (!ok) return;
 
     try {
       await api.delete(`/share/${shareId}`);
       setShares(shares.filter(s => s.share_id !== shareId));
-      setToast({ message: 'Shared snippet deleted successfully.', type: 'success' });
+      toast.success('Shared snippet deleted successfully.');
     } catch (err) {
-      setToast({ message: 'Failed to delete shared snippet.', type: 'error' });
+      toast.error('Failed to delete shared snippet.');
     }
   };
 
@@ -77,7 +84,6 @@ export default function MySharedCodes() {
 
   return (
     <div className="flex-1 overflow-y-auto p-6 text-left">
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Shared Snippets</h1>

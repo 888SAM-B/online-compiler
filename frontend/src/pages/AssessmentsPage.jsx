@@ -16,8 +16,10 @@ import {
 } from 'lucide-react';
 import api from '../api';
 import Loader from '../components/Loader';
+import { useToast } from '../context/ToastContext';
 
 export default function AssessmentsPage() {
+  const toast = useToast();
   const navigate = useNavigate();
   const [assessments, setAssessments] = useState([]);
   const [history, setHistory] = useState([]);
@@ -123,7 +125,7 @@ export default function AssessmentsPage() {
       navigate(`/assessments/workspace/${res.data.attempt_id}`);
     } catch (err) {
       const message = err.response?.data?.detail || 'Failed to start assessment';
-      alert(message);
+      toast.error(message);
     }
   };
 

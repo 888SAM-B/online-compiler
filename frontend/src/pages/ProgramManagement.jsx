@@ -12,13 +12,15 @@ import {
   Calendar 
 } from 'lucide-react';
 import Loader from '../components/Loader';
-import Toast from '../components/Toast';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 export default function ProgramManagement() {
   const navigate = useNavigate();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState(null);
   
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -33,7 +35,7 @@ export default function ProgramManagement() {
       const res = await api.get('/programs');
       setPrograms(res.data);
     } catch (err) {
-      setToast({ message: 'Failed to fetch programs list', type: 'error' });
+      toast.error('Failed to fetch programs list');
     } finally {
       setLoading(false);
     }
@@ -70,19 +72,26 @@ export default function ProgramManagement() {
       setNewProgram({ title: '', language: 'python' });
       navigate(`/editor/${res.data.id}`);
     } catch (err) {
-      setToast({ message: err.response?.data?.detail || 'Failed to create program', type: 'error' });
+      toast.error(err.response?.data?.detail || 'Failed to create program');
     }
   };
 
   const handleDelete = async (id, title) => {
-    if (!window.confirm(`Are you sure you want to delete "${title}"?`)) return;
+    const ok = await confirm({
+      title: 'Delete Program',
+      message: `Are you sure you want to delete "${title}"?`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      danger: true
+    });
+    if (!ok) return;
 
     try {
       await api.delete(`/programs/${id}`);
       setPrograms(programs.filter((p) => p.id !== id));
-      setToast({ message: 'Program deleted successfully', type: 'success' });
+      toast.success('Program deleted successfully');
     } catch (err) {
-      setToast({ message: 'Failed to delete program', type: 'error' });
+      toast.error('Failed to delete program');
     }
   };
 
@@ -116,7 +125,6 @@ export default function ProgramManagement() {
 
   return (
     <div className="flex-1 overflow-y-auto p-6 text-left">
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>

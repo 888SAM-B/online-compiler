@@ -1,10 +1,13 @@
 import logging
+import threading
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db
+from app.executor import pre_pull_all_images
+from app.routes import auth_routes, program_routes, execute_routes, admin_routes, ai_routes, challenge_routes, share_routes, assessment_routes, admin_assessment_routes
 from app.routes import auth_routes, program_routes, execute_routes, admin_routes, ai_routes, challenge_routes, share_routes, assessment_routes, admin_assessment_routes, terminal_routes
 
 
@@ -20,6 +23,12 @@ async def lifespan(app: FastAPI):
     # Startup: Initialize MongoDB and seed data
     logger.info("Initializing application and database...")
     await init_db()
+    
+    # Pre-pull all language Docker images in the background (non-blocking)
+    logger.info("Starting background Docker image pre-pull...")
+    thread = threading.Thread(target=pre_pull_all_images, daemon=True, name="image-prepull")
+    thread.start()
+    
     yield
     # Shutdown: Clean up resources if necessary
     logger.info("Shutting down application...")

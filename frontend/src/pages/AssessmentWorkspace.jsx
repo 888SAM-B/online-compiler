@@ -6,16 +6,21 @@ import {
   ArrowLeft, 
   ArrowRight, 
   CheckCircle, 
-  Save, 
   Loader2,
-  HelpCircle,
   LogOut,
-  Send
+  Send,
+  ShieldAlert,
+  ShieldCheck,
+  Maximize2
 } from 'lucide-react';
 import api from '../api';
 import Loader from '../components/Loader';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 export default function AssessmentWorkspace() {
+  const toast = useToast();
+  const confirm = useConfirm();
   const { attemptId } = useParams();
   const navigate = useNavigate();
 
@@ -32,18 +37,51 @@ export default function AssessmentWorkspace() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [timeExpired, setTimeExpired] = useState(false);
 
-  const timerRef = useRef(null);
+  // Secure Mode States
+  const [secureModeStarted, setSecureModeStarted] = useState(false);
+  const [tabSwitches, setTabSwitches] = useState(0);
+  const [isFullscreenActive, setIsFullscreenActive] = useState(true);
 
+  const timerRef = useRef(null);
+  const tabViolationCountRef = useRef(0);
+  const lastViolationTimeRef = useRef(0);
+  const answersRef = useRef({});
+  const hasSubmitted = useRef(false);
+
+  // Keep answersRef up to date
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
+
+  // Cleanup on unmount - Auto-submit if not already submitted
   useEffect(() => {
     fetchWorkspace();
+
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      
+      // Auto submit on leave
+      if (!hasSubmitted.current && secureModeStarted) {
+        const formattedAnswers = Object.entries(answersRef.current).map(([qId, val]) => ({
+          question_id: qId,
+          selected_answer: val
+        }));
+        
+        // Use keepalive / sendBeacon style API post
+        api.post(`/assessments/attempts/${attemptId}/submit`, {
+          answers: formattedAnswers
+        }).catch(() => {});
+
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
     };
-  }, [attemptId]);
+  }, [attemptId, secureModeStarted]);
 
   // Set up timer countdown when expiresAt changes
   useEffect(() => {
-    if (!expiresAt) return;
+    if (!expiresAt || !secureModeStarted) return;
 
     const calculateTimeLeft = () => {
       let expiresAtStr = expiresAt;
@@ -75,13 +113,89 @@ export default function AssessmentWorkspace() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [expiresAt, timeExpired]);
+  }, [expiresAt, timeExpired, secureModeStarted]);
+
+  // Secure mode tab-switch check listeners
+  useEffect(() => {
+    if (!secureModeStarted) return;
+
+    const handleTabViolation = (reason = "Tab switch or window focus loss detected.") => {
+      const now = Date.now();
+      if (now - lastViolationTimeRef.current < 2000) return; // ignore duplicates
+      lastViolationTimeRef.current = now;
+
+      tabViolationCountRef.current += 1;
+      setTabSwitches(tabViolationCountRef.current);
+
+      if (tabViolationCountRef.current > 3) {
+        triggerSecurityTermination();
+      } else {
+        toast.warning(`${reason} Warning: ${tabViolationCountRef.current}/3 violations. Test will terminate on the 4th infraction.`);
+        // Try to request fullscreen again
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        handleTabViolation("Tab switch detected.");
+      }
+    };
+
+    const handleBlur = () => {
+      handleTabViolation("Window focus loss detected.");
+    };
+
+    const handleFullscreenChange = () => {
+      const isFS = !!document.fullscreenElement;
+      setIsFullscreenActive(isFS);
+      if (!isFS && !hasSubmitted.current) {
+        handleTabViolation("Exited fullscreen mode.");
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleBlur);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleBlur);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, [secureModeStarted]);
+
+  // Disable right-click & developer hotkeys
+  useEffect(() => {
+    if (!secureModeStarted) return;
+
+    const preventRightClick = (e) => e.preventDefault();
+    const preventShortcuts = (e) => {
+      if (e.ctrlKey && (e.key === 'c' || e.key === 'v' || e.key === 'u' || e.key === 'i' || e.key === 'j')) {
+        e.preventDefault();
+        toast.warning("Copying, pasting, or inspecting is disabled during secure assessment.");
+      }
+      if (e.key === 'F12') {
+        e.preventDefault();
+        toast.warning("Developer tools are disabled.");
+      }
+    };
+
+    window.addEventListener('contextmenu', preventRightClick);
+    window.addEventListener('keydown', preventShortcuts);
+
+    return () => {
+      window.removeEventListener('contextmenu', preventRightClick);
+      window.removeEventListener('keydown', preventShortcuts);
+    };
+  }, [secureModeStarted]);
 
   const fetchWorkspace = async () => {
     setLoading(true);
     setError('');
     try {
-      // Call GET /api/assessments/attempts/{attempt_id}/resume to get attempt details
       const res = await api.get(`/assessments/attempts/${attemptId}/resume`);
       const data = res.data;
       
@@ -105,16 +219,28 @@ export default function AssessmentWorkspace() {
     }
   };
 
+  const startSecureWorkspace = async () => {
+    try {
+      await document.documentElement.requestFullscreen();
+      setSecureModeStarted(true);
+      setIsFullscreenActive(true);
+    } catch (err) {
+      console.error('Fullscreen request failed:', err);
+      // Fallback in case browser blocks fullscreen: still set secure mode started
+      setSecureModeStarted(true);
+      setIsFullscreenActive(false);
+      toast.warning("Assessment loaded, but fullscreen mode was blocked by your browser. Please enable fullscreen.");
+    }
+  };
+
   const handleSelectOption = async (questionId, optionValue) => {
     if (timeExpired || isSubmitting) return;
 
-    // Update local state first
     setAnswers(prev => ({
       ...prev,
       [questionId]: optionValue
     }));
 
-    // Save background progress
     setSavingStatus('saving');
     try {
       await api.post(`/assessments/attempts/${attemptId}/save-answer`, {
@@ -128,14 +254,13 @@ export default function AssessmentWorkspace() {
     }
   };
 
-  const handleAutoSubmit = async () => {
+  const triggerSecurityTermination = async () => {
+    hasSubmitted.current = true;
     setTimeExpired(true);
     setIsSubmitting(true);
-    
-    // Automatically submit current answers on timer expiry
+
     try {
-      // Structure answers format for final submission
-      const formattedAnswers = Object.entries(answers).map(([qId, val]) => ({
+      const formattedAnswers = Object.entries(answersRef.current).map(([qId, val]) => ({
         question_id: qId,
         selected_answer: val
       }));
@@ -144,6 +269,39 @@ export default function AssessmentWorkspace() {
         answers: formattedAnswers
       });
       
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+      
+      toast.error("Security Violation: Assessment closed due to excessive tab switches.");
+      navigate(`/assessments/result/${attemptId}`);
+    } catch (err) {
+      console.error('Security submission failed:', err);
+      navigate('/assessments');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAutoSubmit = async () => {
+    hasSubmitted.current = true;
+    setTimeExpired(true);
+    setIsSubmitting(true);
+    
+    try {
+      const formattedAnswers = Object.entries(answersRef.current).map(([qId, val]) => ({
+        question_id: qId,
+        selected_answer: val
+      }));
+
+      await api.post(`/assessments/attempts/${attemptId}/submit`, {
+        answers: formattedAnswers
+      });
+      
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+
       navigate(`/assessments/result/${attemptId}`);
     } catch (err) {
       console.error('Failed to auto-submit:', err);
@@ -156,17 +314,22 @@ export default function AssessmentWorkspace() {
   const handleManualSubmit = async () => {
     if (isSubmitting) return;
 
-    // Check unanswered questions
     const unansweredCount = questions.length - Object.keys(answers).length;
-    const confirmMessage = unansweredCount > 0 
-      ? `You have ${unansweredCount} unanswered questions. Are you sure you want to finish and submit the assessment?`
-      : 'Are you sure you want to submit your assessment and complete the test?';
+    const ok = await confirm({
+      title: 'Submit Assessment',
+      message: unansweredCount > 0 
+        ? `You have ${unansweredCount} unanswered questions left. Are you sure you want to finish and submit the assessment now?`
+        : 'Are you sure you want to submit your assessment and complete the test?',
+      confirmText: 'Submit Assessment',
+      cancelText: 'Cancel',
+      danger: false
+    });
 
-    if (!window.confirm(confirmMessage)) return;
+    if (!ok) return;
 
+    hasSubmitted.current = true;
     setIsSubmitting(true);
     try {
-      // Structure answers format for final submission
       const formattedAnswers = Object.entries(answers).map(([qId, val]) => ({
         question_id: qId,
         selected_answer: val
@@ -176,12 +339,53 @@ export default function AssessmentWorkspace() {
         answers: formattedAnswers
       });
       
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+
       navigate(`/assessments/result/${attemptId}`);
     } catch (err) {
       console.error('Failed to submit assessment:', err);
-      alert(err.response?.data?.detail || 'Failed to submit assessment. Please try again.');
+      toast.error(err.response?.data?.detail || 'Failed to submit assessment. Please try again.');
+      hasSubmitted.current = false;
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleExitClick = async () => {
+    const ok = await confirm({
+      title: 'Exit Assessment',
+      message: 'Are you sure you want to exit? Exiting will immediately submit your assessment with your current progress and terminate this attempt. You cannot resume later.',
+      confirmText: 'Exit & Submit',
+      cancelText: 'Cancel',
+      danger: true
+    });
+
+    if (ok) {
+      hasSubmitted.current = true;
+      setIsSubmitting(true);
+      try {
+        const formattedAnswers = Object.entries(answers).map(([qId, val]) => ({
+          question_id: qId,
+          selected_answer: val
+        }));
+
+        await api.post(`/assessments/attempts/${attemptId}/submit`, {
+          answers: formattedAnswers
+        });
+        
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+
+        navigate(`/assessments/result/${attemptId}`);
+      } catch (err) {
+        console.error('Failed to submit on exit:', err);
+        navigate('/assessments');
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -220,6 +424,38 @@ export default function AssessmentWorkspace() {
     );
   }
 
+  // Render Secure Exam mode gateway screen before starting
+  if (!secureModeStarted) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-dark-950 p-6">
+        <div className="max-w-md w-full bg-dark-900 border border-white/10 rounded-3xl p-8 shadow-2xl text-center">
+          <div className="w-16 h-16 bg-brand-purple/10 text-brand-purple rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <h2 className="text-2xl font-black text-white mb-3">Secure Workspace</h2>
+          <p className="text-sm text-gray-400 mb-6 leading-relaxed">
+            This assessment will run in a locked fullscreen environment. Switching tabs, minimizing windows, exiting fullscreen, or losing window focus more than <strong className="text-rose-400 font-bold">3 times</strong> will automatically terminate and submit your test. Right-click is disabled.
+          </p>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={startSecureWorkspace}
+              className="w-full py-3 bg-brand-purple hover:bg-brand-purple/90 text-white font-bold rounded-xl text-sm transition-all shadow-lg shadow-brand-purple/20 flex items-center justify-center gap-2"
+            >
+              <Maximize2 className="w-4 h-4" />
+              Enter Fullscreen & Start Exam
+            </button>
+            <button
+              onClick={() => navigate('/assessments')}
+              className="w-full py-3 bg-dark-950 border border-white/10 text-gray-400 hover:text-white font-bold rounded-xl text-sm transition-all"
+            >
+              Cancel & Exit
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const currentQuestion = questions[activeIndex];
   const answeredCount = Object.keys(answers).length;
 
@@ -230,11 +466,7 @@ export default function AssessmentWorkspace() {
       <header className="h-16 border-b border-white/5 px-6 flex items-center justify-between shrink-0 bg-dark-900/40 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <button 
-            onClick={() => {
-              if (window.confirm('Are you sure you want to exit the workspace? The countdown timer will continue running in the background.')) {
-                navigate('/assessments');
-              }
-            }}
+            onClick={handleExitClick}
             className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-all"
             title="Exit Assessment"
           >
@@ -246,29 +478,44 @@ export default function AssessmentWorkspace() {
           </div>
         </div>
 
-        {/* Center Saving Status */}
-        <div className="hidden sm:flex items-center gap-1.5 text-xs">
-          {savingStatus === 'saving' && (
-            <span className="flex items-center gap-1 text-gray-400">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving answer...
-            </span>
-          )}
-          {savingStatus === 'saved' && (
-            <span className="flex items-center gap-1 text-brand-green">
-              <CheckCircle className="w-3.5 h-3.5" /> All progress saved
-            </span>
-          )}
-          {savingStatus === 'error' && (
-            <span className="flex items-center gap-1 text-rose-400">
-              <AlertCircle className="w-3.5 h-3.5" /> Connection error, trying again
-            </span>
-          )}
-        </div>
+        {/* Violations Status */}
+        <div className="flex items-center gap-4">
+          <div className="hidden sm:flex items-center gap-1.5 text-xs">
+            {tabSwitches > 0 ? (
+              <span className="flex items-center gap-1 text-rose-400 font-semibold px-2.5 py-1 bg-rose-500/10 border border-rose-500/20 rounded-lg">
+                <ShieldAlert className="w-3.5 h-3.5" /> Secure Violations: {tabSwitches}/3
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-emerald-400 font-semibold px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                <ShieldCheck className="w-3.5 h-3.5" /> Secure Connection Active
+              </span>
+            )}
+          </div>
 
-        {/* Countdown Timer */}
-        <div className={`flex items-center gap-2 px-4 py-2 border rounded-xl transition-all ${getTimerClasses()}`}>
-          <Clock className="w-4 h-4 shrink-0" />
-          <span className="text-sm font-mono font-bold">{timeLeftStr}</span>
+          {/* Saving Status */}
+          <div className="hidden md:flex items-center gap-1.5 text-xs">
+            {savingStatus === 'saving' && (
+              <span className="flex items-center gap-1 text-gray-400">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
+              </span>
+            )}
+            {savingStatus === 'saved' && (
+              <span className="flex items-center gap-1 text-brand-green">
+                <CheckCircle className="w-3.5 h-3.5" /> Saved
+              </span>
+            )}
+            {savingStatus === 'error' && (
+              <span className="flex items-center gap-1 text-rose-400">
+                <AlertCircle className="w-3.5 h-3.5" /> Sync error
+              </span>
+            )}
+          </div>
+
+          {/* Countdown Timer */}
+          <div className={`flex items-center gap-2 px-4 py-2 border rounded-xl transition-all ${getTimerClasses()}`}>
+            <Clock className="w-4 h-4 shrink-0" />
+            <span className="text-sm font-mono font-bold">{timeLeftStr}</span>
+          </div>
         </div>
       </header>
 
@@ -429,10 +676,42 @@ export default function AssessmentWorkspace() {
       {(isSubmitting && timeExpired) && (
         <div className="fixed inset-0 bg-dark-950/90 backdrop-blur-lg flex flex-col items-center justify-center z-50">
           <Loader2 className="w-16 h-16 text-brand-purple animate-spin mb-4" />
-          <h2 className="text-xl font-bold text-white mb-2">Timer Expired</h2>
+          <h2 className="text-xl font-bold text-white mb-2">Timer Expired or Secure Mode Violation</h2>
           <p className="text-gray-400 text-sm max-w-sm text-center">
-            Your time limit has run out. We are securely submitting your answers and evaluating your assessment...
+            Your assessment session is finishing. We are securely submitting your answers and evaluating your results...
           </p>
+        </div>
+      )}
+
+      {/* Fullscreen Required Modal Overlay */}
+      {secureModeStarted && !isFullscreenActive && (
+        <div className="fixed inset-0 bg-dark-950/95 backdrop-blur-lg flex flex-col items-center justify-center z-[9999] p-6 text-center">
+          <div className="max-w-md w-full bg-dark-900 border border-white/10 rounded-3xl p-8 shadow-2xl">
+            <div className="w-16 h-16 bg-rose-500/10 text-rose-400 rounded-2xl flex items-center justify-center mx-auto mb-6 animate-pulse">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+            <h2 className="text-2xl font-black text-white mb-3">Fullscreen Required</h2>
+            <p className="text-sm text-gray-400 mb-6 leading-relaxed">
+              To proceed with your assessment and view the questions, you must remain in fullscreen mode. Exiting fullscreen mode repeatedly triggers security violations.
+            </p>
+            <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold px-4 py-3 rounded-xl mb-6 flex items-center justify-center gap-2">
+              <ShieldAlert className="w-4 h-4" /> Secure Violations: {tabSwitches}/3
+            </div>
+            <button
+              onClick={async () => {
+                try {
+                  await document.documentElement.requestFullscreen();
+                  setIsFullscreenActive(true);
+                } catch (err) {
+                  toast.error("Failed to enter fullscreen. Please enable fullscreen manually or check permissions.");
+                }
+              }}
+              className="w-full py-3 bg-brand-purple hover:bg-brand-purple/90 text-white font-bold rounded-xl text-sm transition-all shadow-lg shadow-brand-purple/20 flex items-center justify-center gap-2"
+            >
+              <Maximize2 className="w-4 h-4" />
+              Re-Enter Fullscreen Mode
+            </button>
+          </div>
         </div>
       )}
     </div>

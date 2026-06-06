@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
+import { ConfirmProvider } from './context/ConfirmContext';
 
 // Components
 import Navbar from './components/Navbar';
@@ -32,10 +34,24 @@ import AssessmentResultPage from './pages/AssessmentResultPage';
 import MyCertificates from './pages/MyCertificates';
 import CertificateVerificationPage from './pages/CertificateVerificationPage';
 import AdminAssessments from './pages/AdminAssessments';
+import AdminCertificates from './pages/AdminCertificates';
 
 // Main Layout Wrapper
 function MainLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
+
+  const isWorkspace = location.pathname.includes('/assessments/workspace/');
+
+  if (isWorkspace) {
+    return (
+      <div className="flex flex-col h-screen w-screen overflow-hidden bg-dark-950 text-gray-100">
+        <div className="flex-1 flex flex-col min-w-0 bg-dark-900/20 overflow-hidden">
+          {children}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-dark-950 text-gray-100">
@@ -87,9 +103,11 @@ function PublicRoute({ children }) {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
+    <ToastProvider>
+      <ConfirmProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <Routes>
           {/* Public Landing Route */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/share/:share_id" element={<SharedCodePage />} />
@@ -268,11 +286,21 @@ export default function App() {
               </AdminRoute>
             } 
           />
+          <Route 
+            path="/admin/certificates" 
+            element={
+              <AdminRoute>
+                <AdminCertificates />
+              </AdminRoute>
+            } 
+          />
 
           {/* Fallback Redirection */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+          </BrowserRouter>
+        </AuthProvider>
+      </ConfirmProvider>
+    </ToastProvider>
   );
 }

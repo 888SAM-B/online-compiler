@@ -12,8 +12,10 @@ import {
 } from 'lucide-react';
 import api from '../api';
 import Loader from '../components/Loader';
+import { useToast } from '../context/ToastContext';
 
 export default function MyCertificates() {
+  const toast = useToast();
   const navigate = useNavigate();
   const [certificates, setCertificates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -59,9 +61,9 @@ export default function MyCertificates() {
     const shareUrl = `${window.location.origin}/verify-certificate/${certificateId}`;
     if (navigator.clipboard) {
       navigator.clipboard.writeText(shareUrl);
-      alert('Certificate verification link copied to clipboard!');
+      toast.success('Verification link copied to clipboard!');
     } else {
-      alert(`Certificate Link: ${shareUrl}`);
+      toast.info(`Certificate Link: ${shareUrl}`);
     }
   };
 

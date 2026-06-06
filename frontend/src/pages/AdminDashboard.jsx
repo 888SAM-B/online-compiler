@@ -8,7 +8,8 @@ import {
   Users, 
   BarChart3,
   Calendar,
-  Globe
+  Globe,
+  Award
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Loader from '../components/Loader';
@@ -68,13 +69,20 @@ export default function AdminDashboard() {
           </p>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Link
             to="/admin/users"
             className="flex items-center gap-2 bg-dark-900 border border-white/5 hover:border-brand-purple/20 px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-300 transition"
           >
             <Users className="w-4 h-4 text-brand-purple" />
             User Management
+          </Link>
+          <Link
+            to="/admin/certificates"
+            className="flex items-center gap-2 bg-dark-900 border border-white/5 hover:border-brand-purple/20 px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-300 transition"
+          >
+            <Award className="w-4 h-4 text-amber-400" />
+            Certificates
           </Link>
           <Link
             to="/admin/analytics"

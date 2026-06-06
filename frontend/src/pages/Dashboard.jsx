@@ -16,14 +16,16 @@ import {
   AlertOctagon
 } from 'lucide-react';
 import Loader from '../components/Loader';
-import Toast from '../components/Toast';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [programs, setPrograms] = useState([]);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [newProgram, setNewProgram] = useState({ title: '', language: 'python' });
 
@@ -53,7 +55,7 @@ export default function Dashboard() {
         setCertificates(certRes.data);
       }
     } catch (err) {
-      setToast({ message: 'Failed to fetch dashboard data', type: 'error' });
+      toast.error('Failed to fetch dashboard data');
     } finally {
       setLoading(false);
     }
@@ -91,19 +93,26 @@ export default function Dashboard() {
       setNewProgram({ title: '', language: 'python' });
       navigate(`/editor/${res.data.id}`);
     } catch (err) {
-      setToast({ message: err.response?.data?.detail || 'Failed to create program', type: 'error' });
+      toast.error(err.response?.data?.detail || 'Failed to create program');
     }
   };
 
   const handleDelete = async (id, title) => {
-    if (!window.confirm(`Are you sure you want to delete "${title}"?`)) return;
+    const ok = await confirm({
+      title: 'Delete Program',
+      message: `Are you sure you want to delete "${title}"?`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      danger: true
+    });
+    if (!ok) return;
 
     try {
       await api.delete(`/programs/${id}`);
       setPrograms(programs.filter(p => p.id !== id));
-      setToast({ message: 'Program deleted successfully', type: 'success' });
+      toast.success('Program deleted successfully');
     } catch (err) {
-      setToast({ message: 'Failed to delete program', type: 'error' });
+      toast.error('Failed to delete program');
     }
   };
 
@@ -139,7 +148,6 @@ export default function Dashboard() {
 
   return (
     <div className="flex-1 overflow-y-auto p-6 text-left">
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>

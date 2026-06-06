@@ -11,20 +11,22 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Loader from '../components/Loader';
-import Toast from '../components/Toast';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 export default function UserManagement() {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState(null);
 
   const fetchUsers = async (query = '') => {
     try {
       const res = await api.get(`/admin/users${query ? `?search=${query}` : ''}`);
       setUsers(res.data);
     } catch (err) {
-      setToast({ message: 'Failed to retrieve user database', type: 'error' });
+      toast.error('Failed to retrieve user database');
     } finally {
       setLoading(false);
     }
@@ -46,24 +48,28 @@ export default function UserManagement() {
         is_blocked: !currentBlockStatus
       });
       setUsers(users.map(u => u.id === userId ? res.data : u));
-      setToast({ 
-        message: `${!currentBlockStatus ? 'Blocked' : 'Unblocked'} user ${userEmail}`, 
-        type: 'success' 
-      });
+      toast.success(`${!currentBlockStatus ? 'Blocked' : 'Unblocked'} user ${userEmail}`);
     } catch (err) {
-      setToast({ message: err.response?.data?.detail || 'Failed to update user block status', type: 'error' });
+      toast.error(err.response?.data?.detail || 'Failed to update user block status');
     }
   };
 
   const handleDeleteUser = async (userId, userEmail) => {
-    if (!window.confirm(`WARNING: Are you sure you want to permanently delete user "${userEmail}" and all their associated files?`)) return;
+    const ok = await confirm({
+      title: 'Delete User',
+      message: `WARNING: Are you sure you want to permanently delete user "${userEmail}" and all their associated files?`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      danger: true
+    });
+    if (!ok) return;
 
     try {
       await api.delete(`/admin/users/${userId}`);
       setUsers(users.filter(u => u.id !== userId));
-      setToast({ message: 'User deleted successfully', type: 'success' });
+      toast.success('User deleted successfully');
     } catch (err) {
-      setToast({ message: 'Failed to delete user', type: 'error' });
+      toast.error('Failed to delete user');
     }
   };
 
@@ -73,7 +79,6 @@ export default function UserManagement() {
 
   return (
     <div className="flex-1 overflow-y-auto p-6 text-left">
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
