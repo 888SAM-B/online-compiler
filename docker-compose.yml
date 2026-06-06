@@ -17,6 +17,7 @@ services:
       dockerfile: Dockerfile
     container_name: compiler_backend
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
       - uploads_data:/app/uploads
     environment:
       - MONGO_URI=mongodb://mongodb:27017
