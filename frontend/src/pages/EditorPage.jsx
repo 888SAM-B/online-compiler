@@ -29,6 +29,254 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import InteractiveTerminal from '../components/InteractiveTerminal';
 import { startSession, getActiveSession } from '../services/terminalService';
 
+const parseMarkdown = (text) => {
+  if (!text) return [];
+  
+  const blocks = [];
+  const lines = text.split('\n');
+  let i = 0;
+  
+  while (i < lines.length) {
+    const line = lines[i];
+    
+    // 1. Code Block
+    if (line.trim().startsWith('```')) {
+      const lang = line.trim().slice(3).trim();
+      let codeLines = [];
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith('```')) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      // skip closing tag if exists
+      if (i < lines.length) i++;
+      blocks.push({
+        type: 'code',
+        lang,
+        content: codeLines.join('\n')
+      });
+      continue;
+    }
+    
+    // 2. Horizontal Rule
+    if (line.trim() === '---' || line.trim() === '***' || line.trim() === '___') {
+      blocks.push({ type: 'hr' });
+      i++;
+      continue;
+    }
+    
+    // 3. Headers
+    const headerMatch = line.match(/^(#{1,6})\s+(.*)$/);
+    if (headerMatch) {
+      blocks.push({
+        type: 'header',
+        level: headerMatch[1].length,
+        content: headerMatch[2]
+      });
+      i++;
+      continue;
+    }
+    
+    // 4. Bullet List Items
+    const listMatch = line.match(/^(\s*)([*\-+])\s+(.*)$/);
+    if (listMatch) {
+      const indent = listMatch[1].length;
+      const content = listMatch[3];
+      
+      blocks.push({
+        type: 'list-item',
+        indent,
+        isOrdered: false,
+        content
+      });
+      i++;
+      continue;
+    }
+    
+    // 5. Ordered List Items
+    const numListMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
+    if (numListMatch) {
+      const indent = numListMatch[1].length;
+      const num = parseInt(numListMatch[2], 10);
+      const content = numListMatch[3];
+      
+      blocks.push({
+        type: 'list-item',
+        indent,
+        isOrdered: true,
+        number: num,
+        content
+      });
+      i++;
+      continue;
+    }
+    
+    // 6. Empty line (adds spacing)
+    if (line.trim() === '') {
+      blocks.push({ type: 'empty' });
+      i++;
+      continue;
+    }
+    
+    // 7. Regular Paragraph
+    let paragraphContent = line;
+    i++;
+    while (i < lines.length && 
+           lines[i].trim() !== '' && 
+           !lines[i].trim().startsWith('```') && 
+           !lines[i].trim().startsWith('---') && 
+           !lines[i].match(/^(#{1,6})\s+/) && 
+           !lines[i].match(/^(\s*)([*\-+])\s+/) &&
+           !lines[i].match(/^(\s*)(\d+)\.\s+/)) {
+      paragraphContent += '\n' + lines[i];
+      i++;
+    }
+    blocks.push({
+      type: 'paragraph',
+      content: paragraphContent
+    });
+  }
+  
+  return blocks;
+};
+
+const renderInlineStyles = (text) => {
+  if (!text) return '';
+  
+  // Escape HTML entities to prevent rendering arbitrary HTML
+  let html = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+    
+  // Bold: **text**
+  html = html.replace(/\*\*([^\*]+)\*\*/g, '<strong class="font-semibold text-white bg-white/5 px-1.5 py-0.5 rounded">$1</strong>');
+  
+  // Italic: *text* (avoiding matching double star leftovers)
+  html = html.replace(/\*([^\*]+)\*/g, '<em class="italic text-gray-200">$1</em>');
+  
+  // Inline Code: `code`
+  html = html.replace(/`([^`]+)`/g, '<code class="bg-brand-purple/20 text-brand-purple border border-brand-purple/30 px-1.5 py-0.5 rounded font-mono text-xs mx-0.5">$1</code>');
+  
+  return html;
+};
+
+function CodeBlock({ code, lang }) {
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  
+  return (
+    <div className="bg-black/40 border border-white/5 rounded-xl my-4 overflow-hidden shadow-lg group relative">
+      <div className="flex items-center justify-between px-4 py-2 bg-white/5 border-b border-white/5">
+        <span className="text-[10px] uppercase font-bold tracking-widest text-brand-purple font-mono bg-brand-purple/10 px-2 py-0.5 rounded border border-brand-purple/20">
+          {lang || 'code'}
+        </span>
+        <button
+          onClick={handleCopyCode}
+          className="text-xs text-gray-400 hover:text-white flex items-center gap-1 bg-white/5 hover:bg-white/10 px-2 py-0.5 rounded-lg transition"
+        >
+          {copied ? (
+            <>
+              <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-emerald-400 font-medium text-[11px]">Copied!</span>
+            </>
+          ) : (
+            <>
+              <Copy className="w-3.5 h-3.5 text-brand-purple" />
+              <span className="font-medium text-[11px]">Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+      <pre className="p-4 font-mono text-xs md:text-sm text-brand-green/90 overflow-x-auto whitespace-pre leading-relaxed scrollbar-thin">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+function AIExplanationRenderer({ text }) {
+  if (!text) return null;
+  
+  const blocks = parseMarkdown(text);
+  
+  return (
+    <div className="flex flex-col gap-1 font-sans text-sm text-gray-300">
+      {blocks.map((block, idx) => {
+        switch (block.type) {
+          case 'header': {
+            const headingClasses = 
+              block.level === 1 ? "text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-brand-purple to-brand-violet mt-6 mb-3 border-b border-white/10 pb-2 flex items-center gap-2" :
+              block.level === 2 ? "text-xl font-bold text-gray-100 mt-5 mb-2.5 border-b border-white/5 pb-1 flex items-center gap-2" :
+              block.level === 3 ? "text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-brand-purple via-brand-purple to-indigo-300 mt-4 mb-2 flex items-center gap-2" :
+              "text-base font-semibold text-gray-200 mt-3 mb-1";
+            
+            return (
+              <div
+                key={idx}
+                className={headingClasses}
+                dangerouslySetInnerHTML={{ __html: renderInlineStyles(block.content) }}
+              />
+            );
+          }
+          case 'code':
+            return <CodeBlock key={idx} code={block.content} lang={block.lang} />;
+            
+          case 'hr':
+            return (
+              <hr
+                key={idx}
+                className="my-6 border-0 h-[1px] bg-gradient-to-r from-transparent via-white/10 to-transparent"
+              />
+            );
+            
+          case 'list-item': {
+            return (
+              <div
+                key={idx}
+                className="flex items-start mb-2"
+                style={block.indent > 0 ? { paddingLeft: `${block.indent * 12}px` } : undefined}
+              >
+                {block.isOrdered ? (
+                  <span className="text-xs font-bold text-brand-purple mt-0.5 mr-2.5 shrink-0 bg-brand-purple/10 px-1.5 py-0.5 rounded border border-brand-purple/20 min-w-[20px] text-center">
+                    {block.number}
+                  </span>
+                ) : (
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-purple mt-2 mr-2.5 shrink-0 shadow-lg shadow-brand-purple/50" />
+                )}
+                <div
+                  className="flex-1 text-gray-300 leading-relaxed text-sm"
+                  dangerouslySetInnerHTML={{ __html: renderInlineStyles(block.content) }}
+                />
+              </div>
+            );
+          }
+          
+          case 'paragraph':
+            return (
+              <p
+                key={idx}
+                className="text-gray-300 leading-relaxed mb-4 text-sm font-sans"
+                dangerouslySetInnerHTML={{ __html: renderInlineStyles(block.content) }}
+              />
+            );
+            
+          case 'empty':
+            return <div key={idx} className="h-2" />;
+            
+          default:
+            return null;
+        }
+      })}
+    </div>
+  );
+}
+
 export default function EditorPage() {
   const { id } = useParams();
   const [interactiveSessionId, setInteractiveSessionId] = useState(null);
@@ -678,8 +926,8 @@ export default function EditorPage() {
                   {/* FEATURE: EXPLAIN */}
                   {aiFeature === 'EXPLAIN' && (
                     <div className="flex flex-col gap-4">
-                      <div className="bg-dark-950/80 border border-white/5 p-4 rounded-xl max-h-[50vh] overflow-y-auto font-mono text-sm leading-relaxed text-gray-300 pre-wrap whitespace-pre-wrap">
-                        {aiResult}
+                      <div className="bg-dark-950/80 border border-white/5 p-6 rounded-2xl max-h-[55vh] overflow-y-auto">
+                        <AIExplanationRenderer text={aiResult} />
                       </div>
                       <div className="flex justify-end">
                         <button
