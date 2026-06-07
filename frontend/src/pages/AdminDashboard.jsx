@@ -9,7 +9,8 @@ import {
   BarChart3,
   Calendar,
   Globe,
-  Award
+  Award,
+  Database
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Loader from '../components/Loader';
@@ -20,6 +21,40 @@ export default function AdminDashboard() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState(null);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const logsPerPage = 15;
+
+  const handleBackupDatabase = async () => {
+    setBackupLoading(true);
+    try {
+      const response = await api.post('/admin/backup', {}, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `mongodb_backup_${new Date().toISOString().slice(0, 10)}.json.gz`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch && filenameMatch.length === 2) {
+          filename = filenameMatch[1];
+        }
+      }
+      
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      setToast({ message: 'Database backup downloaded successfully!', type: 'success' });
+    } catch (err) {
+      console.error(err);
+      setToast({ message: 'Failed to create database backup', type: 'error' });
+    } finally {
+      setBackupLoading(false);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -29,6 +64,7 @@ export default function AdminDashboard() {
       ]);
       setLanguages(langRes.data);
       setLogs(logsRes.data);
+      setCurrentPage(1);
     } catch (err) {
       setToast({ message: 'Failed to retrieve system settings', type: 'error' });
     } finally {
@@ -57,6 +93,11 @@ export default function AdminDashboard() {
     return <Loader fullScreen={true} />;
   }
 
+  const indexOfLastLog = currentPage * logsPerPage;
+  const indexOfFirstLog = indexOfLastLog - logsPerPage;
+  const currentLogs = logs.slice(indexOfFirstLog, indexOfLastLog);
+  const totalPages = Math.ceil(logs.length / logsPerPage);
+
   return (
     <div className="flex-1 overflow-y-auto p-6 text-left">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
@@ -70,6 +111,14 @@ export default function AdminDashboard() {
         </div>
 
         <div className="flex flex-wrap gap-3">
+          <button
+            onClick={handleBackupDatabase}
+            disabled={backupLoading}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-4 py-2.5 rounded-xl text-xs font-semibold text-white transition shadow-lg shadow-emerald-600/20"
+          >
+            <Database className="w-4 h-4" />
+            {backupLoading ? 'Backing up...' : 'Backup Database'}
+          </button>
           <Link
             to="/admin/users"
             className="flex items-center gap-2 bg-dark-900 border border-white/5 hover:border-brand-purple/20 px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-300 transition"
@@ -137,44 +186,74 @@ export default function AdminDashboard() {
             <ShieldAlert className="w-5 h-5 text-brand-crimson" />
             Activity Logs
           </h2>
-          <div className="flex-1 overflow-x-auto min-h-[300px]">
+          <div className="flex-1 overflow-x-auto min-h-[300px] flex flex-col justify-between">
             {logs.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-gray-500 py-12">
                 No activity logs registered.
               </div>
             ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-gray-500 border-b border-white/5 pb-2 text-xs uppercase font-bold tracking-wider">
-                    <th className="text-left pb-3 font-semibold">User</th>
-                    <th className="text-left pb-3 font-semibold">Action</th>
-                    <th className="text-left pb-3 font-semibold">Details</th>
-                    <th className="text-left pb-3 font-semibold">IP Address</th>
-                    <th className="text-right pb-3 font-semibold">Time</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 font-mono text-xs">
-                  {logs.map((log) => (
-                    <tr key={log.id} className="hover:bg-white/5 transition-colors">
-                      <td className="py-3 pr-3 text-gray-300 truncate max-w-[150px]" title={log.email}>
-                        {log.email || 'Guest'}
-                      </td>
-                      <td className="py-3 pr-3 font-semibold text-brand-purple">
-                        {log.action}
-                      </td>
-                      <td className="py-3 pr-3 text-gray-400 max-w-[200px] truncate" title={log.details}>
-                        {log.details}
-                      </td>
-                      <td className="py-3 pr-3 text-gray-500">
-                        {log.ip_address || '—'}
-                      </td>
-                      <td className="py-3 text-right text-gray-500 whitespace-nowrap">
-                        {new Date(log.timestamp).toLocaleTimeString()}
-                      </td>
+              <>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-gray-500 border-b border-white/5 pb-2 text-xs uppercase font-bold tracking-wider">
+                      <th className="text-left pb-3 font-semibold">User</th>
+                      <th className="text-left pb-3 font-semibold">Action</th>
+                      <th className="text-left pb-3 font-semibold">Details</th>
+                      <th className="text-left pb-3 font-semibold">IP Address</th>
+                      <th className="text-right pb-3 font-semibold">Time</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 font-mono text-xs">
+                    {currentLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-white/5 transition-colors">
+                        <td className="py-3 pr-3 text-gray-300 truncate max-w-[150px]" title={log.email}>
+                          {log.email || 'Guest'}
+                        </td>
+                        <td className="py-3 pr-3 font-semibold text-brand-purple">
+                          {log.action}
+                        </td>
+                        <td className="py-3 pr-3 text-gray-400 max-w-[200px] truncate" title={log.details}>
+                          {log.details}
+                        </td>
+                        <td className="py-3 pr-3 text-gray-500">
+                          {log.ip_address || '—'}
+                        </td>
+                        <td className="py-3 text-right text-gray-500 whitespace-nowrap">
+                          {new Date(log.timestamp).toLocaleTimeString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Pagination Controls */}
+                {logs.length > logsPerPage && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between border-t border-white/5 pt-4 mt-6 gap-4 text-xs">
+                    <div className="text-gray-400">
+                      Showing {indexOfFirstLog + 1} to {Math.min(indexOfLastLog, logs.length)} of {logs.length} entries
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1.5 rounded-lg bg-dark-900 border border-white/5 text-gray-300 hover:border-brand-purple/20 disabled:opacity-40 disabled:hover:border-white/5 transition font-semibold"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-gray-300 font-semibold px-2">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1.5 rounded-lg bg-dark-900 border border-white/5 text-gray-300 hover:border-brand-purple/20 disabled:opacity-40 disabled:hover:border-white/5 transition font-semibold"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

@@ -1,7 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
+from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from datetime import datetime, timedelta
 from bson import ObjectId
+import json
+import gzip
+from io import BytesIO
 
 from app.database import get_db
 from app.auth import get_current_admin_user, log_activity
@@ -36,6 +40,8 @@ def serialize_lang(lang: dict) -> dict:
 def serialize_log(log: dict) -> dict:
     log["id"] = str(log["_id"])
     log.pop("_id", None)
+    if "user_id" in log and log["user_id"] is not None:
+        log["user_id"] = str(log["user_id"])
     return log
 
 @router.get("/users", response_model=List[UserResponse])
@@ -395,3 +401,57 @@ async def admin_export_challenges(
         exported.append(ch_doc)
         
     return exported
+
+@router.post("/backup")
+async def trigger_db_backup(
+    current_admin: dict = Depends(get_current_admin_user),
+    db=Depends(get_db)
+):
+    try:
+        collections = await db.list_collection_names()
+        
+        backup_data = {}
+        for col_name in collections:
+            cursor = db[col_name].find({})
+            documents = await cursor.to_list(length=100000)
+            
+            serialized_docs = []
+            for doc in documents:
+                doc_copy = doc.copy()
+                for k, v in doc_copy.items():
+                    if isinstance(v, ObjectId):
+                        doc_copy[k] = str(v)
+                    elif isinstance(v, datetime):
+                        doc_copy[k] = v.isoformat()
+                    elif isinstance(v, bytes):
+                        try:
+                            doc_copy[k] = v.decode('utf-8')
+                        except UnicodeDecodeError:
+                            doc_copy[k] = v.decode('latin1')
+                serialized_docs.append(doc_copy)
+            backup_data[col_name] = serialized_docs
+            
+        json_str = json.dumps(backup_data, default=str)
+        
+        compressed_file = BytesIO()
+        with gzip.GzipFile(fileobj=compressed_file, mode='w') as f:
+            f.write(json_str.encode('utf-8'))
+            
+        compressed_file.seek(0)
+        
+        await log_activity(
+            user_id=current_admin["id"],
+            email=current_admin["email"],
+            action="DATABASE_BACKUP",
+            details="Triggered manual database backup from admin panel"
+        )
+        
+        filename = f"mongodb_backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json.gz"
+        headers = {
+            'Content-Disposition': f'attachment; filename="{filename}"',
+            'Access-Control-Expose-Headers': 'Content-Disposition'
+        }
+        return StreamingResponse(compressed_file, media_type="application/gzip", headers=headers)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Backup failed: {str(e)}")
