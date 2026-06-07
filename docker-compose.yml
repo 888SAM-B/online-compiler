@@ -18,6 +18,7 @@ services:
     container_name: compiler_backend
     volumes:
       - uploads_data:/app/uploads
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - MONGO_URI=mongodb://mongodb:27017
       - REDIS_URI=redis://redis:6379
